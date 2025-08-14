@@ -99,8 +99,8 @@ def get_recent_dates():
 def select_categories() -> List[str]:
     """Interactive category selection"""
     choices = [
-        questionary.Choice(f"{emoji} {name}", value=key)
-        for key, emoji in CATEGORIES.items()
+        questionary.Choice(emoji_name, value=key)
+        for key, emoji_name in CATEGORIES.items()
     ]
     
     selected = questionary.checkbox(
@@ -124,8 +124,8 @@ def select_categories() -> List[str]:
 def select_workflow():
     """Select a predefined workflow"""
     choices = [
-        questionary.Choice(f"{emoji} {name}", value=key)
-        for key, emoji in WORKFLOWS.items()
+        questionary.Choice(emoji_name, value=key)
+        for key, emoji_name in WORKFLOWS.items()
     ]
     
     return questionary.select(
