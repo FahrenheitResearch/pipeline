@@ -89,11 +89,54 @@ cd hrrr-dr-4
 conda create -n hrrr_maps python=3.11
 conda activate hrrr_maps
 
-# Install dependencies
+# Install core dependencies
 conda install -c conda-forge cartopy cfgrib matplotlib xarray numpy pandas
 pip install psutil requests
 
+# Install CLI enhancement libraries for beautiful interface
+pip install rich typer questionary
+
 # Note: MetPy is no longer required - all calculations use optimized pure NumPy
+```
+
+## 🎮 Beautiful Interactive CLI
+
+The HRRR processor now features a gorgeous, interactive command-line interface built with Rich and Typer:
+
+### Quick Start
+```bash
+# Launch the interactive CLI
+./hrrr interactive
+
+# Or use Python directly
+python hrrr_cli.py interactive
+```
+
+### CLI Features
+- **🎨 Beautiful Interface**: Rich colors, tables, and progress bars
+- **📋 Interactive Menus**: Point-and-click category selection
+- **⚡ Quick Workflows**: Pre-configured workflows for common tasks  
+- **🎬 GIF Integration**: Create animations directly from the CLI
+- **📊 System Status**: Real-time processing status and resource monitoring
+- **🔧 Smart Validation**: Input validation and helpful error messages
+
+### CLI Commands
+
+```bash
+# Interactive mode (recommended for beginners)
+./hrrr interactive
+
+# Quick workflow execution
+./hrrr quick severe --date 20250813 --hour 21 --workers 8
+./hrrr quick fire     # Fire weather monitoring
+./hrrr quick nowcast  # Nowcasting setup
+
+# System status and information
+./hrrr status         # Show recent processing and system info
+./hrrr list          # List available categories and parameters
+
+# Get help
+./hrrr --help
 ```
 
 ## 📊 Available Weather Parameters
