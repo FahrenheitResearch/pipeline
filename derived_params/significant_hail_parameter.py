@@ -1,6 +1,14 @@
 from .common import *
 from ._mixing_ratio_approximation import _mixing_ratio_approximation
 
+# SPC SHIP v1.1 Constants
+SHIP_CAPE_NORM = 1500.0      # J/kg
+SHIP_MR_NORM = 13.6          # g/kg  
+SHIP_LAPSE_NORM = 7.0        # °C/km
+SHIP_SHEAR_NORM = 20.0       # m/s
+SHIP_TEMP_REF = -20.0        # °C
+SHIP_TEMP_NORM = 5.0         # °C
+
 def significant_hail_parameter(mucape: np.ndarray, mucin: np.ndarray,
                              lapse_rate_700_500: np.ndarray, 
                              wind_shear_06km: np.ndarray,
@@ -52,34 +60,39 @@ def significant_hail_parameter(mucape: np.ndarray, mucin: np.ndarray,
               f"Shear>{60 if extreme_shear else 'OK'}, Lapse>{12 if extreme_lapse else 'OK'}")
     
     # ========================================================================
-    # TERM 1: muCAPE - SPC normalization 1500 J/kg, cap at 1.0
+    # TERM 1: muCAPE - SPC normalization, cap at 1.0
     # ========================================================================
-    cape_term = np.clip(mucape / 1500.0, 0, 1.0)
+    cape_term = np.clip(mucape / SHIP_CAPE_NORM, 0.0, 1.0)
     
     # ========================================================================
-    # TERM 2: MU mixing ratio - SPC normalization 13.6 g/kg, cap at 1.0
+    # TERM 2: MU mixing ratio - SPC normalization with fallback order
     # ========================================================================
-    # Use 2m mixing ratio as proxy for MU mixing ratio (common operational approximation)
-    mr_term = np.clip(mixing_ratio_2m / 13.6, 0, 1.0)
+    # Moisture term preference (first available):
+    # 1. MU parcel mixing ratio (if available)
+    # 2. Mean mixing ratio sfc-3km AGL (if available) 
+    # 3. 2m mixing ratio (fallback - label as such)
+    
+    # For now, use 2m mixing ratio as fallback (most commonly available)
+    # TODO: Implement MU parcel and sfc-3km mean when profiles available
+    mr_term = np.clip(mixing_ratio_2m / SHIP_MR_NORM, 0.0, 1.0)
+    print("🔍 SHIP: Using 2m mixing ratio fallback (not MU parcel)")
     
     # ========================================================================
-    # TERM 3: Lapse rate - SPC normalization 7°C/km, cap at 1.0
+    # TERM 3: Lapse rate - SPC normalization, cap at 1.0
     # ========================================================================
-    lapse_term = np.clip(lapse_rate_700_500 / 7.0, 0, 1.0)
+    lapse_term = np.clip(lapse_rate_700_500 / SHIP_LAPSE_NORM, 0.0, 1.0)
     
     # ========================================================================
-    # TERM 4: Wind shear - SPC normalization 20 m/s, cap at 1.0
+    # TERM 4: Wind shear - SPC normalization, cap at 1.0
     # ========================================================================
-    shear_term = np.clip(wind_shear_06km / 20.0, 0, 1.0)
+    shear_term = np.clip(wind_shear_06km / SHIP_SHEAR_NORM, 0.0, 1.0)
     
     # ========================================================================
-    # TERM 5: Temperature term - (Freezing level - 500mb temp) / 8°C
+    # TERM 5: Temperature term - SPC v1.1 specification
     # ========================================================================
-    # SPC formula: (freezing level height - 500mb temperature) / 8
-    # where freezing level is in km and 500mb temp is in °C
-    # This represents the temperature difference between freezing level and 500mb
-    freezing_level_km = freezing_level / 1000.0  # Convert m to km
-    temp_term = np.clip((freezing_level_km - temp_500) / 8.0, 0, 1.0)
+    # SPC formula: (SHIP_TEMP_REF - T500) / SHIP_TEMP_NORM with cap at 1.0
+    # This represents how cold the 500mb level is relative to reference temperature
+    temp_term = np.clip((SHIP_TEMP_REF - temp_500) / SHIP_TEMP_NORM, 0.0, 1.0)
     
     # ========================================================================
     # FINAL SHIP CALCULATION - All five terms multiplied

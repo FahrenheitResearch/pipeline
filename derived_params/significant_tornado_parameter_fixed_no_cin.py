@@ -1,21 +1,19 @@
 from .common import *
 
-def significant_tornado_parameter_fixed(mlcape: np.ndarray, mlcin: np.ndarray, 
-                                       srh_01km: np.ndarray, shear_06km: np.ndarray, 
-                                       lcl_height: np.ndarray) -> np.ndarray:
+def significant_tornado_parameter_fixed_no_cin(mlcape: np.ndarray, srh_01km: np.ndarray,
+                                               shear_06km: np.ndarray, lcl_height: np.ndarray) -> np.ndarray:
     """
-    Compute Significant Tornado Parameter (STP) - Fixed Layer SPC Definition
+    Compute Significant Tornado Parameter (STP) - Fixed Layer WITHOUT CIN
     
-    STP_fixed = (MLCAPE/1500) × (SRH_01km/150) × (BWD_06km/20) × ((2000-MLLCL)/1000) × ((150+MLCIN)/125)
+    STP_fixed_no_cin = (MLCAPE/1500) × (SRH_01km/150) × (BWD_06km/20) × ((2000-MLLCL)/1000)
     
-    This is the CANONICAL SPC fixed-layer implementation WITH CIN term per 2012 update.
-    Uses fixed 0-1km SRH and 0-6km bulk wind difference as defined in literature.
+    Status: 🟡 Modified (not SPC canonical)
     
-    Status: 🟢 SPC-Operational
+    This is a MODIFIED variant that omits the CIN term from the SPC fixed-layer STP.
+    The canonical SPC fixed-layer STP includes CIN per the 2012 update.
     
     Args:
         mlcape: Mixed Layer CAPE (J/kg)
-        mlcin: Mixed Layer CIN (J/kg, negative values)
         srh_01km: 0-1 km Storm Relative Helicity (m²/s²) - FIXED LAYER
         shear_06km: 0-6 km bulk wind difference magnitude (m/s) - FIXED LAYER
         lcl_height: Mixed Layer LCL height (m AGL)
@@ -23,23 +21,11 @@ def significant_tornado_parameter_fixed(mlcape: np.ndarray, mlcin: np.ndarray,
     Returns:
         STP values (dimensionless, always ≥ 0)
         
-    Interpretation:
-        STP > 1: Significant tornado potential
-        STP > 4: Extreme tornado potential
-        STP > 8: Historic outbreak-level environment
-        
     References:
-        Thompson et al. (2003): Original fixed-layer formulation
-        SPC Mesoanalysis Page: Canonical implementation
+        Based on Thompson et al. (2003) but without CIN term
     """
     # ========================================================================
-    # MLCIN SIGN FIX - Ensure HRRR MLCIN field is negative
-    # ========================================================================
-    # Force MLCIN to negative values (HRRR may store as positive magnitude)
-    mlcin = -np.abs(mlcin)
-    
-    # ========================================================================
-    # SPC FIXED-LAYER STP TERMS (2012 update with CIN)
+    # MODIFIED STP TERMS (no CIN)
     # ========================================================================
     
     # 1. CAPE term: MLCAPE/1500 (configurable cap)
@@ -47,8 +33,6 @@ def significant_tornado_parameter_fixed(mlcape: np.ndarray, mlcin: np.ndarray,
     cape_term = np.clip(cape_term, 0.0, 1.5)  # Optional cap for extreme values
     
     # 2. LCL term: (2000-MLLCL)/1000 with proper clipping
-    # LCL < 1000m → 1.0 (extremely favorable)
-    # LCL > 2000m → 0.0 (unfavorable, high cloud base)
     lcl_term = (2000.0 - lcl_height) / 1000.0
     lcl_term = np.clip(lcl_term, 0.0, 1.0)
     
@@ -59,22 +43,15 @@ def significant_tornado_parameter_fixed(mlcape: np.ndarray, mlcin: np.ndarray,
     shear_term = shear_06km / 20.0
     shear_term = np.clip(shear_term, 0.0, 1.5)  # Optional cap for extreme shear
     
-    # 5. CIN term: (150+MLCIN)/125 with proper clipping [SPC 2012 update]
-    # Strong CIN (< -200 J/kg) → 0.0 (complete inhibition)
-    # Weak CIN (> -50 J/kg) → near 1.0 (little inhibition)
-    cin_term = (150.0 + mlcin) / 125.0
-    cin_term = np.clip(cin_term, 0.0, 1.0)
+    # ========================================================================
+    # FINAL STP CALCULATION - Four terms (no CIN)
+    # ========================================================================
+    stp = cape_term * lcl_term * srh_term * shear_term
     
     # ========================================================================
-    # FINAL STP CALCULATION - All five terms multiplied
-    # ========================================================================
-    stp = cape_term * lcl_term * srh_term * shear_term * cin_term
-    
-    # ========================================================================
-    # HARD GATES - SPC standard thresholds
+    # HARD GATES - Basic thresholds
     # ========================================================================
     stp = np.where(mlcape < 100, 0.0, stp)        # Insufficient instability
-    stp = np.where(mlcin <= -200, 0.0, stp)       # Excessive inhibition
     stp = np.where(lcl_height > 2000, 0.0, stp)   # Cloud base too high
     
     # Ensure STP is never negative
@@ -82,7 +59,6 @@ def significant_tornado_parameter_fixed(mlcape: np.ndarray, mlcin: np.ndarray,
     
     # Mask invalid input data
     stp = np.where((mlcape < 0) | (np.isnan(mlcape)) |
-                  (np.isnan(mlcin)) |
                   (np.isnan(srh_01km)) | 
                   (shear_06km < 0) | (np.isnan(shear_06km)) |
                   (lcl_height < 0) | (np.isnan(lcl_height)), 

@@ -1,19 +1,22 @@
 from .common import *
 
-def significant_tornado_parameter(mlcape: np.ndarray, mlcin: np.ndarray,
-                                srh_01km: np.ndarray, shear_06km: np.ndarray,
-                                lcl_height: np.ndarray) -> np.ndarray:
+def significant_tornado_parameter_fixed_modified(mlcape: np.ndarray, mlcin: np.ndarray,
+                                                srh_01km: np.ndarray, shear_06km: np.ndarray,
+                                                lcl_height: np.ndarray) -> np.ndarray:
     """
-    Compute Significant Tornado Parameter (STP) - Legacy Compatibility Version
+    Compute Significant Tornado Parameter (STP) - Fixed Layer Version with CIN (MODIFIED)
     
-    STP = (MLCAPE/1500) × (SRH_01km/150) × (BWD_06km/12) × ((2000-MLLCL)/1000) × ((MLCIN+200)/150)
+    STP_fixed_modified = (MLCAPE/1500) × (SRH_01km/150) × (BWD_06km/12) × ((2000-MLLCL)/1000) × ((MLCIN+200)/150)
     
-    Status: 🟡 Legacy (for backward compatibility)
+    Status: 🟡 Modified (not SPC canonical)
     
-    This function maintains backward compatibility with existing configurations.
-    For new implementations, prefer:
-    - significant_tornado_parameter_fixed() for SPC canonical fixed-layer
-    - significant_tornado_parameter_effective() for SPC canonical effective-layer
+    This is a PROJECT-SPECIFIC VARIANT that mixes fixed layers with CIN term.
+    Pure SPC implementations use either:
+    - Fixed layers WITHOUT CIN term (see significant_tornado_parameter_fixed)
+    - Effective layers WITH CIN term (see significant_tornado_parameter_effective)
+    
+    This variant adds the CIN term to the fixed-layer approach, which may be
+    useful for operational applications but is not the canonical SPC definition.
     
     Args:
         mlcape: Mixed Layer CAPE (J/kg)
@@ -27,6 +30,7 @@ def significant_tornado_parameter(mlcape: np.ndarray, mlcin: np.ndarray,
         
     References:
         Based on Thompson et al. (2003) fixed layers + Thompson et al. (2012) CIN term
+        Note: This specific combination is a project modification
     """
     # 1. CAPE term: MLCAPE/1500 (no arbitrary cap - let physics decide)
     cape_term = np.maximum(mlcape / 1500.0, 0)
@@ -41,13 +45,13 @@ def significant_tornado_parameter(mlcape: np.ndarray, mlcin: np.ndarray,
     # 3. SRH term: 0-1km SRH/150 (preserve sign for left-moving detection)
     srh_term = np.maximum(srh_01km / 150.0, 0)
     
-    # 4. Shear term: EBWD/12 m/s with SPC clipping (legacy normalization)
+    # 4. Shear term: EBWD/12 m/s with SPC clipping
     # < 12.5 m/s (25 kt) → 0 (insufficient shear)
     # > 30 m/s (60 kt) → cap at 1.5 (diminishing returns)
     shear_term = np.where(shear_06km < 12.5, 0,
                          np.where(shear_06km > 30, 1.5, shear_06km / 12.0))
     
-    # 5. CIN term: (MLCIN + 200)/150 - Legacy formula
+    # 5. CIN term: (MLCIN + 200)/150 - Official SPC formula
     # MLCIN > -50 J/kg → 1.0 (weak/no cap)
     # MLCIN = -200 J/kg → 0.0 (strong cap kills tornado potential)
     # MLCIN < -200 J/kg → 0.0 (very strong cap)

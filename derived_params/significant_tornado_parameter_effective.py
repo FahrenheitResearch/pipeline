@@ -4,27 +4,32 @@ def significant_tornado_parameter_effective(mlcape: np.ndarray, mlcin: np.ndarra
                                           effective_srh: np.ndarray, effective_shear: np.ndarray,
                                           mllcl_height: np.ndarray) -> np.ndarray:
     """
-    Compute Enhanced STP using Effective Layers - Latest SPC Definition
+    Compute STP (Effective Layer Version with CIN) - Current SPC Definition
     
-    STP_eff = (MLCAPE/1500) × (Effective_SRH/150) × (Effective_Shear/20) × ((2000-MLLCL)/1000) × ((MLCIN+200)/150)
+    STP_effective = (MLCAPE/1500) × (ESRH/150) × (EBWD/20) × ((2000-MLLCL)/1000) × ((150+MLCIN)/125)
     
-    Uses effective shear and effective SRH instead of fixed layers for improved accuracy.
-    Based on Thompson et al. (2004) updated methodology with effective layer approach.
+    This is the EFFECTIVE LAYER VERSION with CIN term as currently used by SPC.
+    Uses effective-layer storm-relative helicity (ESRH) and effective bulk wind 
+    difference (EBWD) instead of fixed layers for improved accuracy in varied environments.
     
     Args:
         mlcape: Mixed Layer CAPE (J/kg)
         mlcin: Mixed Layer CIN (J/kg, negative values)
-        effective_srh: Effective Storm Relative Helicity (m²/s²)
-        effective_shear: Effective bulk shear magnitude (m/s)
+        effective_srh: Effective Storm Relative Helicity (m²/s²) - ESRH
+        effective_shear: Effective Bulk Wind Difference (m/s) - EBWD
         mllcl_height: Mixed Layer LCL height (m AGL)
         
     Returns:
-        Enhanced STP values (dimensionless, always ≥ 0)
+        STP_effective values (dimensionless, always ≥ 0)
         
     Interpretation:
         STP_eff > 1: Heightened significant tornado risk
         STP_eff > 4: Extreme tornado potential
         STP_eff > 8: Historic outbreak-level environment
+        
+    References:
+        Thompson et al. (2012): Updated STP formulation
+        SPC Mesoanalysis Page: Current operational implementation
     """
     # 1. CAPE term: MLCAPE/1500 (no arbitrary cap)
     cape_term = np.maximum(mlcape / 1500.0, 0)
@@ -39,25 +44,32 @@ def significant_tornado_parameter_effective(mlcape: np.ndarray, mlcin: np.ndarra
     # 3. Effective SRH term: Effective_SRH/150 (preserve sign but cap negative)
     srh_term = np.maximum(effective_srh / 150.0, 0)
     
-    # 4. Effective Shear term: Effective_Shear/20 m/s with SPC clipping
-    # < 10 m/s → 0 (insufficient shear)
-    # > 20 m/s → cap at 1.0 (normalization factor)
-    shear_term = np.where(effective_shear < 10, 0,
-                         np.where(effective_shear >= 20, 1.0, 
+    # 4. Effective Shear term: EBWD/20 m/s with SPC clipping
+    # < 12.5 m/s (25 kt) → 0 (insufficient shear)
+    # > 30 m/s (60 kt) → cap at 1.5 (diminishing returns)
+    shear_term = np.where(effective_shear < 12.5, 0,
+                         np.where(effective_shear > 30, 1.5, 
                                  effective_shear / 20.0))
     
-    # 5. CIN term: (MLCIN + 200)/150 - Official SPC formula  
-    # MLCIN > -50 J/kg → 1.0 (weak/no cap)
-    # MLCIN < -200 J/kg → 0.0 (strong cap suppresses tornadoes)
-    cin_term = np.where(mlcin > -50, 1.0,
-                       np.where(mlcin < -200, 0.0,
-                               np.maximum((mlcin + 200) / 150.0, 0.0)))
+    # ========================================================================
+    # MLCIN SIGN FIX - Ensure HRRR MLCIN field is negative
+    # ========================================================================
+    # Force MLCIN to negative values (HRRR may store as positive magnitude)
+    mlcin = -np.abs(mlcin)
+    
+    # 5. CIN term: (150 + MLCIN)/125 - SPC standard formula  
+    # Strong CIN (< -200 J/kg) → 0.0 (complete inhibition)
+    # Weak CIN (> -50 J/kg) → near 1.0 (little inhibition)
+    cin_term = (150.0 + mlcin) / 125.0
+    cin_term = np.clip(cin_term, 0.0, 1.0)
     
     # Enhanced STP calculation (multiplicative)
     stp_eff = cape_term * lcl_term * srh_term * shear_term * cin_term
     
-    # Zero out where CAPE is too low for convection
-    stp_eff = np.where(mlcape < 100, 0, stp_eff)
+    # Hard zeros for unphysical conditions - ANY of these makes STP = 0
+    stp_eff = np.where(mlcape < 100, 0.0, stp_eff)         # Insufficient instability
+    stp_eff = np.where(mlcin <= -200, 0.0, stp_eff)        # Too strong inhibition
+    stp_eff = np.where(mllcl_height > 2000, 0.0, stp_eff)  # Cloud base too high
     
     # Ensure STP is never negative
     stp_eff = np.maximum(stp_eff, 0.0)

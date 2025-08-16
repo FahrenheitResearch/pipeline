@@ -12,9 +12,14 @@ import numpy as np
 # Import all the calculation functions
 from .common import *
 from .supercell_composite_parameter import supercell_composite_parameter
+from .supercell_composite_parameter_modified import supercell_composite_parameter_modified
 from .significant_tornado_parameter import significant_tornado_parameter
+from .significant_tornado_parameter_fixed import significant_tornado_parameter_fixed
+from .significant_tornado_parameter_fixed_modified import significant_tornado_parameter_fixed_modified
+from .significant_tornado_parameter_fixed_no_cin import significant_tornado_parameter_fixed_no_cin
 from .significant_tornado_parameter_effective import significant_tornado_parameter_effective
 from .energy_helicity_index import energy_helicity_index
+from .energy_helicity_index_display import energy_helicity_index_display
 from .energy_helicity_index_01km import energy_helicity_index_01km
 from .wind_shear_magnitude import wind_shear_magnitude
 from .updraft_helicity_threshold import updraft_helicity_threshold
@@ -82,9 +87,14 @@ from .calculate_lapse_rate_700_500 import calculate_lapse_rate_700_500
 # Create a dispatch table of all available functions
 _DERIVED_FUNCTIONS = {
     'supercell_composite_parameter': supercell_composite_parameter,
+    'supercell_composite_parameter_modified': supercell_composite_parameter_modified,
     'significant_tornado_parameter': significant_tornado_parameter,
+    'significant_tornado_parameter_fixed': significant_tornado_parameter_fixed,
+    'significant_tornado_parameter_fixed_modified': significant_tornado_parameter_fixed_modified,
+    'significant_tornado_parameter_fixed_no_cin': significant_tornado_parameter_fixed_no_cin,
     'significant_tornado_parameter_effective': significant_tornado_parameter_effective,
     'energy_helicity_index': energy_helicity_index,
+    'energy_helicity_index_display': energy_helicity_index_display,
     'energy_helicity_index_01km': energy_helicity_index_01km,
     'wind_shear_magnitude': wind_shear_magnitude,
     'updraft_helicity_threshold': updraft_helicity_threshold,
@@ -233,42 +243,115 @@ def create_derived_config() -> Dict[str, Dict[str, Any]]:
     """
     config = {
         'scp': {
-            'title': 'Supercell Composite Parameter',
+            'title': 'Supercell Composite Parameter (SPC Standard)',
             'units': 'dimensionless',
             'cmap': 'SCP',
-            'levels': [-2, -1, -0.5, 0, 0.5, 1, 2, 4, 8, 10],
-            'extend': 'both',
+            'levels': [0, 0.5, 1, 2, 4, 8, 12, 16, 20],
+            'extend': 'max',
             'category': 'severe',
             'derived': True,
-            'inputs': ['mucape', 'srh_03km', 'wind_shear_06km'],
+            'status': '🟢 SPC-Operational',
+            'inputs': ['mucape', 'effective_srh', 'effective_shear'],
             'function': 'supercell_composite_parameter',
-            'description': 'SCP > 1 indicates supercell potential. Positive = right-moving storms, negative = left-moving storms.'
+            'description': 'SPC standard SCP (no CIN term). SCP > 1 indicates supercell potential.'
         },
         
-        'stp': {
-            'title': 'Significant Tornado Parameter (STP)',
+        'scp_modified': {
+            'title': 'Supercell Composite Parameter (Modified with CIN)',
+            'units': 'dimensionless',
+            'cmap': 'SCP',
+            'levels': [0, 0.5, 1, 2, 4, 8, 12, 16, 20],
+            'extend': 'max',
+            'category': 'severe',
+            'derived': True,
+            'status': '🟡 Modified',
+            'inputs': ['mucape', 'effective_srh', 'effective_shear', 'mucin'],
+            'function': 'supercell_composite_parameter_modified',
+            'description': 'Modified SCP with CIN weighting for operational applications.'
+        },
+        
+        'stp_fixed': {
+            'title': 'Significant Tornado Parameter (Fixed Layer - SPC)',
             'units': 'dimensionless', 
             'cmap': 'STP',
             'levels': [0, 0.5, 1, 2, 3, 4, 5, 8, 10],
             'extend': 'max',
             'category': 'severe',
             'derived': True,
+            'status': '🟢 SPC-Operational',
             'inputs': ['mlcape', 'mlcin', 'srh_01km', 'wind_shear_06km', 'lcl_height'],
-            'function': 'significant_tornado_parameter',
-            'description': 'STP > 1 indicates heightened EF2+ tornado risk. Values 4-8+ indicate extreme outbreak potential.'
+            'function': 'significant_tornado_parameter_fixed',
+            'description': 'SPC canonical fixed-layer STP with CIN term. STP > 1 indicates heightened EF2+ tornado risk.'
         },
         
-        'ehi': {
-            'title': 'Energy-Helicity Index (0-3 km)',
+        'stp_effective': {
+            'title': 'Significant Tornado Parameter (Effective Layer - SPC)',
+            'units': 'dimensionless', 
+            'cmap': 'STP',
+            'levels': [0, 0.5, 1, 2, 3, 4, 5, 8, 10],
+            'extend': 'max',
+            'category': 'severe',
+            'derived': True,
+            'status': '🟢 SPC-Operational',
+            'inputs': ['mlcape', 'mlcin', 'effective_srh', 'effective_shear', 'lcl_height'],
+            'function': 'significant_tornado_parameter_effective',
+            'description': 'SPC canonical effective-layer STP with CIN term. Uses ESRH and EBWD for improved accuracy.'
+        },
+        
+        'stp_fixed_no_cin': {
+            'title': 'Significant Tornado Parameter (Fixed Layer - No CIN)',
+            'units': 'dimensionless', 
+            'cmap': 'STP',
+            'levels': [0, 0.5, 1, 2, 3, 4, 5, 8, 10],
+            'extend': 'max',
+            'category': 'severe',
+            'derived': True,
+            'status': '🟡 Modified',
+            'inputs': ['mlcape', 'srh_01km', 'wind_shear_06km', 'lcl_height'],
+            'function': 'significant_tornado_parameter_fixed_no_cin',
+            'description': 'Modified STP without CIN term for comparison studies.'
+        },
+        
+        'stp': {
+            'title': 'Significant Tornado Parameter (Legacy)',
+            'units': 'dimensionless', 
+            'cmap': 'STP',
+            'levels': [0, 0.5, 1, 2, 3, 4, 5, 8, 10],
+            'extend': 'max',
+            'category': 'severe',
+            'derived': True,
+            'status': '🟡 Legacy',
+            'inputs': ['mlcape', 'mlcin', 'srh_01km', 'wind_shear_06km', 'lcl_height'],
+            'function': 'significant_tornado_parameter',
+            'description': 'Legacy STP for backward compatibility. Prefer stp_fixed or stp_effective.'
+        },
+        
+        'ehi_spc': {
+            'title': 'Energy-Helicity Index (SPC Canonical)',
+            'units': 'dimensionless',
+            'cmap': 'EHI',
+            'levels': [-2, -1, 0, 1, 2, 4, 6, 8, 10],
+            'extend': 'both',
+            'category': 'severe',
+            'derived': True,
+            'status': '🟢 SPC-Operational',
+            'inputs': ['sbcape', 'srh_03km'],
+            'function': 'energy_helicity_index',
+            'description': 'SPC canonical EHI: (CAPE/1000) × (SRH/100). EHI > 2 indicates significant tornado potential.'
+        },
+        
+        'ehi_display': {
+            'title': 'Energy-Helicity Index (Display Scaled)',
             'units': 'dimensionless',
             'cmap': 'EHI',
             'levels': [-1, -0.5, 0, 0.5, 1, 2, 3, 5, 7],
             'extend': 'both',
             'category': 'severe',
             'derived': True,
+            'status': '🟡 Modified',
             'inputs': ['sbcape', 'srh_03km'],
-            'function': 'energy_helicity_index',
-            'description': 'EHI > 2 indicates significant tornado potential. Positive = right-moving, negative = left-moving supercells.'
+            'function': 'energy_helicity_index_display',
+            'description': 'Display-scaled EHI with damping for visualization. Adjusted thresholds: >0.6, >1.25, >2.5.'
         },
         
         'brn': {
@@ -324,9 +407,14 @@ class DerivedParameters:
     
     # Add static methods for all functions for backward compatibility
     supercell_composite_parameter = staticmethod(supercell_composite_parameter)
+    supercell_composite_parameter_modified = staticmethod(supercell_composite_parameter_modified)
     significant_tornado_parameter = staticmethod(significant_tornado_parameter)
+    significant_tornado_parameter_fixed = staticmethod(significant_tornado_parameter_fixed)
+    significant_tornado_parameter_fixed_modified = staticmethod(significant_tornado_parameter_fixed_modified)
+    significant_tornado_parameter_fixed_no_cin = staticmethod(significant_tornado_parameter_fixed_no_cin)
     significant_tornado_parameter_effective = staticmethod(significant_tornado_parameter_effective)
     energy_helicity_index = staticmethod(energy_helicity_index)
+    energy_helicity_index_display = staticmethod(energy_helicity_index_display)
     energy_helicity_index_01km = staticmethod(energy_helicity_index_01km)
     wind_shear_magnitude = staticmethod(wind_shear_magnitude)
     updraft_helicity_threshold = staticmethod(updraft_helicity_threshold)

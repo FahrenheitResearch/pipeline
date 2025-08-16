@@ -2,21 +2,31 @@ from .common import *
 
 def cape_03km(mlcape: np.ndarray, cape_profile: np.ndarray = None) -> np.ndarray:
     """
-    Compute 0-3 km MLCAPE - Realistic Approximation
+    Compute 0-3 km MLCAPE - APPROXIMATION METHOD
     
-    0-3 km CAPE represents low-level buoyancy and is typically much smaller
-    than total CAPE. Most values range 50-300 J/kg, rarely exceeding 500 J/kg.
+    ⚠️ IMPORTANT: This is a HEURISTIC APPROXIMATION, not a true calculation.
+    True 0-3km CAPE requires vertical integration of positive buoyancy from 
+    surface to 3km AGL. This function uses empirical fractions of total CAPE.
+    
+    For accurate 0-3km CAPE:
+    1. Use HRRR direct output if available (e.g., CAPE:300-0 mb above ground)
+    2. Compute from full thermodynamic profile using proper parcel theory
+    3. Use tools like MetPy, SHARPpy, or similar for vertical integration
+    
+    This approximation is based on climatological ratios where 0-3km CAPE
+    typically represents 10-30% of total CAPE, with lower fractions for
+    higher total CAPE values.
     
     Args:
         mlcape: Mixed-Layer CAPE (J/kg)
-        cape_profile: Full CAPE profile (if available)
+        cape_profile: Full CAPE profile (if available) - NOT CURRENTLY USED
         
     Returns:
-        0-3 km MLCAPE approximation (J/kg)
+        0-3 km MLCAPE approximation (J/kg) - EMPIRICAL ESTIMATE ONLY
         
-    Note:
-        This is an approximation. HRRR may provide direct 0-3km CAPE via 
-        GRIB pressure layer access (300-0mb layer) which would be preferred.
+    Warning:
+        This approximation can have errors of ±50% or more. Do not use for
+        critical applications requiring accurate low-level buoyancy assessment.
     """
     # More realistic approximation based on meteorological studies:
     # 0-3km CAPE is typically 10-30% of total CAPE, with diminishing returns for high CAPE

@@ -1,34 +1,40 @@
 from .common import *
 
-def supercell_composite_parameter(mucape: np.ndarray, effective_srh: np.ndarray, 
-                                effective_shear: np.ndarray) -> np.ndarray:
+def supercell_composite_parameter_modified(mucape: np.ndarray, effective_srh: np.ndarray, 
+                                         effective_shear: np.ndarray, mucin: np.ndarray) -> np.ndarray:
     """
-    Compute Supercell Composite Parameter (SCP) - Standard SPC Definition
+    Compute Supercell Composite Parameter (SCP) - Modified with CIN
     
-    SCP = (muCAPE / 1000) × (ESRH / 50) × shear_term
+    SCP_modified = (muCAPE / 1000) × (ESRH / 50) × shear_term × CIN_weight
     
-    This is the STANDARD SPC implementation WITHOUT CIN term.
-    Uses three core ingredients for supercell assessment.
+    Status: 🟡 Modified (not SPC canonical)
     
-    Status: 🟢 SPC-Operational
-    
-    Ingredients:
-    - muCAPE: most-unstable CAPE (J kg⁻¹)
-    - ESRH: effective storm-relative helicity (m² s⁻²) 
-    - EBWD: effective bulk-wind difference (m s⁻¹)
+    This is a PROJECT-SPECIFIC VARIANT that adds CIN weighting to standard SCP.
+    The standard SCP does not include CIN - this variant may be useful for
+    operational applications but is not the canonical SPC definition.
     
     Args:
         mucape: Most-Unstable CAPE (J/kg) - HRRR field MUCAPE
         effective_srh: Effective Storm Relative Helicity (m²/s²) - HRRR field ESRHL
         effective_shear: Effective Bulk Wind Difference (m/s) - derived parameter
+        mucin: Most-Unstable CIN (J/kg, negative values) - HRRR field MUCIN
         
     Returns:
-        SCP values (dimensionless, always ≥ 0)
+        SCP modified values (dimensionless, always ≥ 0)
+        
+    CIN Weight Formula:
+        - muCIN > -40 J/kg: CIN_weight = 1.0 (no penalty)
+        - muCIN ≤ -40 J/kg: CIN_weight = -40/muCIN (proportional penalty)
         
     References:
-        Thompson et al. (2003): Original SCP formulation
-        SPC Mesoanalysis Page: Current operational implementation
+        Based on Thompson et al. (2003) SCP + project-specific CIN enhancement
     """
+    
+    # ========================================================================
+    # MUCIN SIGN FIX - Ensure HRRR MUCIN field is negative
+    # ========================================================================
+    # Force MUCIN to negative values (HRRR may store as positive magnitude)
+    mucin = -np.abs(mucin)
     
     # ========================================================================
     # QUALITY FLAGS - Log outliers for debugging
@@ -38,7 +44,7 @@ def supercell_composite_parameter(mucape: np.ndarray, effective_srh: np.ndarray,
     extreme_shear = np.any(effective_shear > 60)
     
     if extreme_cape or extreme_srh or extreme_shear:
-        print(f"🔍 SCP outliers detected: muCAPE>{6000 if extreme_cape else 'OK'}, "
+        print(f"🔍 SCP Modified outliers detected: muCAPE>{6000 if extreme_cape else 'OK'}, "
               f"SRH>{800 if extreme_srh else 'OK'}, Shear>{60 if extreme_shear else 'OK'}")
     
     # ========================================================================
@@ -61,18 +67,32 @@ def supercell_composite_parameter(mucape: np.ndarray, effective_srh: np.ndarray,
     shear_term = np.clip((effective_shear - 10.0) / 10.0, 0.0, 1.0)
     
     # ========================================================================
-    # 4. FINAL SCP - CAPE × SRH × Shear (NO CIN term in standard SCP)
+    # 4. CIN WEIGHT - Project-specific enhancement
     # ========================================================================
-    scp = cape_term * srh_term * shear_term
+    # If inhibition is weak (muCIN > -40 J/kg), no penalty (weight = 1.0)
+    # Otherwise, proportional penalty: -40 / muCIN
+    cin_weight = np.where(
+        mucin > -40.0,            # Weak inhibition
+        1.0,                      # No penalty
+        -40.0 / mucin             # Proportional penalty
+    )
+    # Ensure valid range (should be 0.0 to 1.0 naturally)
+    cin_weight = np.clip(cin_weight, 0.0, 1.0)
     
     # ========================================================================
-    # 5. QUALITY CONTROL - Mask invalid data and set physical limits
+    # 5. FINAL SCP - CAPE × SRH × Shear × CIN_weight
+    # ========================================================================
+    scp = cape_term * srh_term * shear_term * cin_weight
+    
+    # ========================================================================
+    # 6. QUALITY CONTROL - Mask invalid data and set physical limits
     # ========================================================================
     # Mask invalid input data
     valid_data = (
         np.isfinite(mucape) & (mucape >= 0) &
         np.isfinite(effective_srh) &
-        np.isfinite(effective_shear) & (effective_shear >= 0)
+        np.isfinite(effective_shear) & (effective_shear >= 0) &
+        np.isfinite(mucin)
     )
     
     # Set invalid or unphysical values to 0
@@ -83,39 +103,5 @@ def supercell_composite_parameter(mucape: np.ndarray, effective_srh: np.ndarray,
     
     # Ensure SCP is never negative (should not happen with above logic)
     scp = np.maximum(scp, 0.0)
-    
-    return scp
-
-
-def supercell_composite_parameter_legacy(mucape: np.ndarray, srh_03km: np.ndarray, 
-                                        shear_06km: np.ndarray, mlcin: np.ndarray = None) -> np.ndarray:
-    """
-    Legacy SCP implementation - kept for backwards compatibility
-    
-    Uses 0-3km SRH instead of ESRH and ML-CIN instead of MU-CIN.
-    For operational use, prefer the main supercell_composite_parameter function.
-    """
-    # CAPE term (only positive CAPE contributes)
-    cape_term = np.maximum(mucape / 1000.0, 0)
-    
-    # SRH term - PRESERVE SIGN! Negative SRH = left-moving storms
-    # Do NOT take absolute value or force to positive
-    srh_term = srh_03km / 50.0
-    
-    # Shear term with SPC ops cap (stops background carpets)
-    # Cap at 1.0 once shear >= 20 m/s (what SPC does in operations)  
-    shear_term = np.minimum(shear_06km / 20.0, 1.0)
-    
-    # SCP calculation - can be positive or negative
-    scp = cape_term * srh_term * shear_term
-    
-    # Apply CIN gate to knock out carpets (optional but recommended)
-    if mlcin is not None:
-        scp = scp * cin_gate(mlcin)
-    
-    # Mask invalid input data (but allow negative SRH)
-    scp = np.where((mucape < 0) | (np.isnan(mucape)) | 
-                  (np.isnan(srh_03km)) | (shear_06km < 0) | (np.isnan(shear_06km)), 
-                  np.nan, scp)
     
     return scp
