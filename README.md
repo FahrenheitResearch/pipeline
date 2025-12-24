@@ -1,561 +1,167 @@
-# HRRR Derived Parameters v2.2 - Weather Model Processing System
+# HRRR Weather Model Processing System
 
-A high-performance, extensible system for downloading, processing, and visualizing weather model data from NOAA's HRRR (High-Resolution Rapid Refresh), RRFS (Rapid Refresh Forecast System), and GFS (Global Forecast System) models. **Now featuring SPC-aligned severe weather parameters** with proper Storm Prediction Center compliance and **108 comprehensive weather parameters**.
+High-performance pipeline for downloading, processing, and visualizing HRRR, RRFS, and GFS weather model data. Pure NumPy calculations with SPC-compliant severe weather parameters.
 
-## 🚀 Key Features
-
-- **🎯 SPC-Aligned Parameters**: Storm Prediction Center compliant implementations (v2.2)
-- **Multi-Model Support**: HRRR, RRFS, and GFS models  
-- **108 Weather Parameters**: Including corrected severe weather indices, instability parameters, smoke/fire products
-- **Pure NumPy Performance**: Optimized meteorological calculations without external dependencies
-- **Parallel Processing**: 8x faster map generation using multiprocessing
-- **Smart Caching**: Avoids reprocessing completed products
-- **Continuous Monitoring**: Automatically process new model runs as they become available
-- **Modular Architecture**: Clean, maintainable code organized in focused modules
-- **Professional Visualizations**: SPC-style plots with customizable colormaps
-
-### 🆕 v2.2 Highlights - SPC Compliance Achieved
-- **✅ STP Canonical**: Fixed-layer and effective-layer with proper EBWD/20 normalization
-- **✅ EHI SPC Standard**: Canonical (CAPE/1000 × SRH/100) alongside display-scaled version  
-- **✅ SHIP v1.1 Corrected**: SPC standard with proper temperature term implementation
-- **✅ Centralized Constants**: Single `/derived_params/constants.py` prevents parameter drift
-- **✅ Transport Wind Method**: Improved ventilation rate using mixed-layer representation
-- **✅ Status Badge System**: Clear 🟢 SPC-Operational vs 🟡 Modified vs 🔵 Research labeling
-- **✅ 108 Total Parameters**: Complete coverage across all meteorological domains
-
-## 📁 Project Structure
-
-```
-hrrr-manual-4/
-├── processor_cli.py              # Main CLI (70 lines - thin wrapper)
-├── processor_batch.py            # Batch processing (19 lines - thin wrapper)
-├── processor_base.py             # Base processor (13 lines - thin wrapper)
-├── smart_hrrr/                   # 🆕 NEW: Modular architecture package
-│   ├── __init__.py               # Package exports
-│   ├── utils.py                  # Utility functions (logging, memory, parsing)
-│   ├── products.py               # Product management and availability
-│   ├── io.py                     # I/O operations and directory structure
-│   ├── availability.py           # Cycle detection and availability checks
-│   ├── derived.py                # Derived parameter computation logic
-│   ├── processor_core.py         # Slim HRRRProcessor core
-│   ├── orchestrator.py           # Process orchestration and workflows
-│   └── parallel_engine.py        # Parallel processing engine
-├── monitor_continuous.py         # Continuous monitoring for new model runs
-├── field_registry.py             # Dynamic field configuration system
-├── field_templates.py            # Reusable parameter templates
-├── model_config.py              # Model-specific configurations (URLs, patterns)
-├── map_enhancer.py              # Modern map styling enhancements
-├── config/
-│   ├── colormaps.py             # Custom colormaps for weather parameters
-├── core/
-│   ├── downloader.py            # GRIB file download management
-│   ├── grib_loader.py           # GRIB data extraction with cfgrib
-│   ├── metadata.py              # Metadata generation for products
-│   └── plotting.py              # Map generation with Cartopy
-├── derived_params/              # 44 derived parameter calculations (🆕 SPC-aligned v2.2)
-│   ├── constants.py             # 🆕 Centralized constants module (v2.2)
-│   ├── *_fixed.py               # 🟢 SPC canonical implementations  
-│   ├── *_effective.py           # 🟢 SPC effective-layer variants
-│   └── ventilation_rate_from_components.py  # 🆕 Transport wind method
-├── parameters/                  # JSON configuration files by category
-│   ├── severe.json             # Severe weather parameters
-│   ├── instability.json        # CAPE, CIN, stability indices
-│   ├── smoke.json              # Fire and smoke products
-│   └── ...                     # Additional categories
-├── tools/
-│   ├── process_all_products.py # Batch processing utilities
-│   ├── process_single_hour.py  # Single forecast hour processing
-│   ├── create_gifs.py          # 🎬 Automated GIF/animation generation
-│   └── hrrr_gif_maker.py       # Core GIF creation engine
-└── outputs/                     # Generated products (organized by date/model/hour)
-```
-
-### 🏗️ Architecture Improvements (Latest Refactor)
-
-**Modular Design**: The codebase has been refactored from monolithic files (~2800 LOC) into a clean, modular `smart_hrrr/` package:
-
-- **Maintainability**: Each module has a single responsibility
-- **Testability**: Isolated functions are easier to test
-- **Extensibility**: Add new features without touching existing code
-- **Backward Compatibility**: All existing commands work unchanged
-
-#### Smart HRRR Modules
-
-| Module | Purpose | Key Functions |
-|--------|---------|---------------|
-| `utils.py` | Common utilities | Logging setup, memory checks, hour parsing |
-| `products.py` | Product management | Check existing products, find missing items |
-| `io.py` | File operations | Directory structure, GRIB staging, cleanup |
-| `availability.py` | Data availability | Latest cycle detection, forecast hour checks |
-| `derived.py` | Heavy computations | Derived parameter and composite calculations |
-| `processor_core.py` | Core processor | Slim HRRRProcessor class (delegates to other modules) |
-| `orchestrator.py` | Workflow control | Process orchestration, parallel coordination |
-| `parallel_engine.py` | Performance | Optimized parallel map generation |
-
-## 🛠️ Installation
+## Quick Start
 
 ```bash
-# Clone the repository
-git clone <repository-url> hrrr-dr-4
-cd hrrr-dr-4
-
-# Create conda environment
+# Setup
 conda create -n hrrr_maps python=3.11
 conda activate hrrr_maps
-
-# Install core dependencies
 conda install -c conda-forge cartopy cfgrib matplotlib xarray numpy pandas
-pip install psutil requests
+pip install psutil requests rich typer questionary
 
-# Install CLI enhancement libraries for beautiful interface
-pip install rich typer questionary
+# Process latest severe weather
+python processor_cli.py --latest --categories severe --workers 8
 
-# Note: MetPy is no longer required - all calculations use optimized pure NumPy
-```
-
-## 🎮 Beautiful Interactive CLI
-
-The HRRR processor now features a gorgeous, interactive command-line interface built with Rich and Typer:
-
-### Quick Start
-```bash
-# Launch the interactive CLI
-./hrrr interactive
-
-# Or use Python directly
+# Interactive mode
 python hrrr_cli.py interactive
 ```
 
-### CLI Features
-- **🎨 Beautiful Interface**: Rich colors, tables, and progress bars
-- **📋 Interactive Menus**: Point-and-click category selection
-- **⚡ Quick Workflows**: Pre-configured workflows for common tasks  
-- **🎬 GIF Integration**: Create animations directly from the CLI
-- **📊 System Status**: Real-time processing status and resource monitoring
-- **🔧 Smart Validation**: Input validation and helpful error messages
+## Features
 
-### CLI Commands
+- **108 weather parameters** across severe, instability, smoke, surface, reflectivity, and more
+- **SPC-compliant** tornado/supercell parameters (STP, SCP, SHIP, EHI)
+- **Parallel processing** with configurable workers
+- **Multi-model support**: HRRR, RRFS, GFS
+- **Diurnal analysis** with rolling 24h windows
+- **Animated GIFs** from forecast sequences
+
+## Usage
+
+### Basic Processing
 
 ```bash
-# Interactive mode (recommended for beginners)
-./hrrr interactive
+# Latest model run, specific categories
+python processor_cli.py --latest --categories severe,instability --hours 0-12
 
-# Quick workflow execution
-./hrrr quick severe --date 20250813 --hour 21 --workers 8
-./hrrr quick fire     # Fire weather monitoring
-./hrrr quick nowcast  # Nowcasting setup
+# Specific date/cycle
+python processor_cli.py 20251224 12 --categories smoke --workers 8
 
-# System status and information
-./hrrr status         # Show recent processing and system info
-./hrrr list          # List available categories and parameters
-
-# Get help
-./hrrr --help
+# Single fields
+python processor_cli.py --latest --fields stp_fixed,sbcape,srh_01km
 ```
 
-## 📊 Available Weather Parameters (108 Total) - Fully Validated
-
-### 🎯 SPC-Aligned Severe Weather Parameters (v2.2) ✅ VALIDATED
-
-| Parameter | Status | CLI Name | Description | Key Thresholds | Test Status |
-|-----------|--------|----------|-------------|----------------|-------------|
-| **STP Fixed** | 🟢 SPC | `stp_fixed` | Canonical fixed-layer with CIN term | >1: EF2+ tornado risk | ✅ Tested |
-| **STP Effective** | 🟢 SPC | `stp_effective` | Canonical effective-layer | >4: Extreme potential | ✅ Tested |
-| **EHI Canonical** | 🟢 SPC | `ehi_spc` | SPC standard (CAPE/1000×SRH/100) | >2: Sig tornado potential | ✅ Tested |
-| **SCP Standard** | 🟢 SPC | `scp` | Standard (no CIN term) | >1: Supercell potential | ✅ Tested |
-| **SHIP v1.1** | 🟢 SPC | `ship` | Corrected temperature term | >1: ≥2" hail potential | ✅ Tested |
-| **SCP Modified** | 🟡 Modified | `scp_modified` | Enhanced with CIN weighting | >1: Enhanced discrimination | ✅ Tested |
-| **EHI Display** | 🟡 Modified | `ehi_display` | Anti-saturation damping | >0.6/>1.25/>2.5 | ✅ Tested |
-| **STP No-CIN** | 🟡 Modified | `stp_fixed_no_cin` | Research variant | >1: Comparison studies | ✅ Tested |
-| **VGP** | 🟡 Modified | `vgp` | Dimensionless with K≈40 | >0.2/>0.5 m/s² | ✅ Tested |
-| **VTP** | 🔵 Research | `vtp` | 7-term violent tornado parameter | >1: Violent potential | ✅ Tested |
-| **0-3km CAPE** | 🔵 Research | `cape_03km` | Low-level buoyancy | >200 J/kg significant | ✅ Tested |
-
-### Complete Parameter Inventory by Category (✅ All Validated):
-- **Severe Weather** (36 params): STP variants, SCP variants, SHIP, EHI variants, VTP, VGP, bulk shear, effective layers
-- **Upper Air** (12 params): Heights, temperatures, winds at standard levels, freezing level, lapse rates
-- **Instability** (10 params): CAPE/CIN (surface, mixed-layer, most-unstable), LCL, lifted index
-- **Surface** (10 params): Temperature, dewpoint, pressure, winds, relative humidity, terrain
-- **Composites** (9 params): Multi-parameter visualizations with overlays and wind barbs
-- **Smoke/Fire** (6 params): Near-surface smoke, visibility, dispersion indices, fire weather
-- **Atmospheric** (6 params): Cloud cover, lightning, visibility, planetary boundary layer
-- **Heat Stress** (5 params): Wet bulb temperature, WBGT variants, mixing ratio
-- **Backup CAPE/CIN** (5 params): Fallback calculations when HRRR fields unavailable
-- **Reflectivity** (3 params): Composite, 1km AGL, 4km AGL radar
-- **Precipitation** (2 params): Instantaneous rate, accumulated total
-- **Updraft Helicity** (2 params): Multi-level mesocyclone detection
-- **Fire Weather** (2 params): Ventilation rate (🆕 transport wind), fire weather index
-
-**v2.2 Test Coverage:** 21 comprehensive unit tests validate core improvements including SPC parameters, effective layer detection, boundary layer physics, and transport wind methodology.
-
-## 🎯 Workflow Examples
-
-### 1. 🌪️ **Severe Weather Analysis** - Complete Outbreak Assessment (🆕 SPC-Aligned v2.2)
+### Diurnal Temperature Analysis
 
 ```bash
-# Generate all severe weather products with SPC-compliant parameters  
-python processor_cli.py 20250515 18 --hours 0-24 --categories severe,instability --workers 8
+# Rolling 24h temperature range across 48h forecast
+python tools/process_diurnal.py --latest --synoptic --end-fhr 48 --rolling --workers 12 --gif
+```
 
-# Focus on SPC canonical tornado parameters (v2.2)
-python processor_cli.py 20250515 18 --hours 0-12 --fields stp_fixed,stp_effective,ehi_spc,cape_03km --debug
+### Animations
 
-# Compare STP variants for research (canonical vs modified)
-python processor_cli.py 20250515 18 --hours 6-18 --fields stp_fixed,stp_effective,stp_fixed_no_cin
-
-# Advanced tornado assessment with VTP research parameter
-python processor_cli.py 20250515 18 --hours 0-12 --fields vtp,cape_03km,lapse_rate_03km
-
-# Create animations with v2.2 SPC-aligned parameters
+```bash
 cd tools
-python create_gifs.py 20250515 18z --categories severe --max-hours 24 --duration 400
-
-# Output: SPC-compliant severe weather analysis with canonical tornado parameters + v2.2 enhancements
+python create_gifs.py 20251224 12z --categories severe --max-hours 24
 ```
 
-### 2. 🔥 **Fire Weather Monitoring** - Real-time Smoke Tracking (🆕 Transport Wind v2.2)
+### Continuous Monitoring
 
 ```bash
-# Monitor latest runs continuously for fire weather
 python monitor_continuous.py &
-
-# Process current smoke conditions with improved ventilation rate (v2.2 transport wind)
-python processor_cli.py --latest --categories smoke,fire --hours 0-6
-
-# Test new transport wind ventilation rate specifically
-python processor_cli.py --latest --fields ventilation_rate,fire_weather_index --hours 0-12 --debug
-
-# Create smoke evolution animations
-cd tools  
-python create_gifs.py $(date +%Y%m%d) $(date +%H)z --categories smoke --max-hours 6 --duration 250
-
-# Output: Real-time smoke and fire weather products with 6-hour animations + improved dispersion calculations
 ```
 
-### 3. ⛈️ **Nowcasting Setup** - Rapid Updates for Current Conditions
+## Project Structure
 
-```bash
-# Process latest run with reflectivity and surface conditions
-python processor_cli.py --latest --categories reflectivity,surface,severe --hours 0-3 --workers 4
-
-# Create rapid-update animations for nowcasting
-cd tools
-python create_gifs.py --latest --categories reflectivity --max-hours 3 --duration 200
-
-# Generate single-hour snapshots for briefings
-cd ..
-python processor_cli.py --latest --hours 0 --categories severe,instability,surface
-
-# Output: Fast nowcasting products with 3-hour high-speed animations
+```
+├── processor_cli.py          # Main CLI
+├── hrrr_cli.py               # Interactive CLI (Rich/Typer)
+├── smart_hrrr/               # Core processing modules
+├── derived_params/           # 80+ derived parameter calculations
+├── parameters/               # JSON configs by category
+├── config/colormaps.py       # Custom colormaps
+├── core/                     # GRIB loading, plotting
+├── tools/                    # GIF creation, diurnal processing
+└── outputs/                  # Generated maps
 ```
 
-### 4. 🌡️ **Heat Stress Analysis** - Summer Operations Planning
+## Parameters
 
-```bash
-# Process heat stress parameters for extended forecast
-python processor_cli.py 20250715 12 --hours 0-48 --categories heat,surface --workers 6
+### Severe Weather (SPC-Aligned)
+| Parameter | Description |
+|-----------|-------------|
+| `stp_fixed` | Significant Tornado Parameter (fixed layer) |
+| `stp_effective` | STP with effective inflow layer |
+| `scp` | Supercell Composite Parameter |
+| `ship` | Significant Hail Parameter |
+| `ehi_spc` | Energy-Helicity Index |
 
-# Focus on peak heating hours (18-00Z)
-python processor_cli.py 20250715 12 --hours 6-12 --fields wbgt_estimated_outdoor,wet_bulb_temperature,t2m
+### Other Categories
+- **Instability**: CAPE/CIN variants, lifted index, LCL height
+- **Surface**: Temperature, dewpoint, winds, pressure
+- **Smoke/Fire**: Near-surface smoke, visibility, ventilation rate
+- **Reflectivity**: Composite, 1km/4km AGL
+- **Heat Stress**: Wet bulb, WBGT variants
+- **Diurnal**: Temperature range, heating/cooling rates
 
-# Create heat index animations for planning
-cd tools
-python create_gifs.py 20250715 12z --categories heat --max-hours 48 --duration 500
+Run `python processor_cli.py --list-fields` for the full list.
 
-# Quick wet-bulb temperature check
-cd ..
-python processor_cli.py 20250715 12 --hours 6-12 --fields wet_bulb_temperature --debug
+## Adding Parameters
 
-# Output: Complete heat stress analysis with 48-hour planning animations
-```
-
-### 5. 📊 **Research Dataset Creation** - Multi-Parameter Analysis
-
-```bash
-# Generate comprehensive dataset for case study
-python processor_cli.py 20250604 00 --hours 0-48 --workers 8  # All categories
-
-# Create parameter-specific animations
-cd tools
-python create_gifs.py 20250604 00z --categories severe,instability --max-hours 48 --duration 350
-python create_gifs.py 20250604 00z --categories smoke,fire --max-hours 48 --duration 350  
-python create_gifs.py 20250604 00z --categories reflectivity --max-hours 48 --duration 300
-
-# Extract specific parameters for analysis
-cd ..
-python processor_cli.py 20250604 00 --fields stp,ship,sbcape,mlcape,srh_01km --hours 0-48
-
-# Generate verification dataset
-python processor_cli.py 20250604 06 --hours 0-42  # 6Z run for comparison
-python processor_cli.py 20250604 12 --hours 0-36  # 12Z run for comparison
-
-# Output: Multi-run research dataset with comprehensive animations
-```
-
-### 6. 🎯 **Operational Monitoring** - Continuous Weather Surveillance
-
-```bash
-# Set up continuous monitoring with specific focus
-python monitor_continuous.py &
-
-# Manual processing for critical updates
-python processor_cli.py --latest --categories severe,reflectivity --hours 0-6 --workers 4
-
-# Create real-time situation awareness products
-cd tools
-python create_gifs.py --latest --categories severe --max-hours 6 --duration 300
-
-# Check system status and recent products
-cd ..
-ls outputs/hrrr/$(date +%Y%m%d)/*/animations/*/
-
-# Debug specific parameter if needed
-HRRR_DEBUG=1 python processor_cli.py --latest --fields updraft_helicity_02km --hours 0-3
-
-# Output: Continuous operational monitoring with automated updates
-```
-
-## 🔧 Advanced Commands
-
-### Model Selection & Debugging
-
-```bash
-# Process different models
-python processor_cli.py --latest --model rrfs  # RRFS experimental
-python processor_cli.py --latest --model gfs   # GFS global
-
-# Force reprocessing with enhanced debugging
-python processor_cli.py 20250715 12 --force --debug --workers 1
-HRRR_DEBUG=1 python processor_cli.py 20250715 12 --categories severe
-
-# Check data availability
-python processor_cli.py 20250715 12 --check-availability
-```
-
-### Batch Processing & Utilities
-
-```bash
-# Process multiple categories efficiently
-python processor_cli.py 20250715 12 --categories "severe,instability,smoke" --workers 8
-
-# Quick field listing
-python processor_cli.py --list-fields --category severe
-
-# Test single parameter
-python processor_cli.py --latest --fields sbcape --debug
-```
-
-## 📋 Quick Reference - Common Use Cases
-
-### 🎯 SPC-Aligned Parameters (v2.2)
-| **Use Case** | **Command** | **Output** |
-|--------------|-------------|------------|
-| **SPC tornado parameters** | `python processor_cli.py --latest --fields stp_fixed,stp_effective,ehi_spc,cape_03km` | Canonical SPC implementations |
-| **Parameter comparison** | `python processor_cli.py --latest --fields stp_fixed,stp_effective,stp_fixed_no_cin` | Compare STP variants |
-| **SPC supercell analysis** | `python processor_cli.py --latest --fields scp,scp_modified,effective_srh` | Standard vs modified SCP |
-| **Hail analysis (SPC v1.1)** | `python processor_cli.py --latest --fields ship,mucape,lapse_rate_700_500` | Corrected SHIP implementation |
-| **Violent tornado research** | `python processor_cli.py --latest --fields vtp,cape_03km,lapse_rate_03km` | 7-term VTP with low-level focus |
-| **Fire weather (transport wind)** | `python processor_cli.py --latest --fields ventilation_rate,fire_weather_index` | v2.2 transport wind methodology |
-
-### General Use Cases
-| **Use Case** | **Command** | **Output** |
-|--------------|-------------|------------|
-| **Latest severe weather** | `python processor_cli.py --latest --categories severe` | Current severe weather maps |
-| **Tornado parameters now** | `python processor_cli.py --latest --fields stp_fixed,srh_01km --hours 0-3` | 3-hour SPC tornado evolution |
-| **Smoke conditions today** | `python processor_cli.py --latest --categories smoke --hours 0-12` | 12-hour smoke forecast |
-| **Quick reflectivity check** | `python processor_cli.py --latest --fields reflectivity_comp --hours 0-1` | Current radar composite |
-| **Heat stress planning** | `python processor_cli.py --latest --categories heat --hours 6-12` | Peak heating period analysis |
-| **Research case study** | `python processor_cli.py 20250604 00 --hours 0-48 --workers 8` | Complete 48-hour dataset |
-| **Severe weather animation** | `cd tools && python create_gifs.py YYYYMMDD HHz --categories severe --max-hours 24` | 24-hour tornado parameter movies |
-| **Operational monitoring** | `python monitor_continuous.py` | Continuous auto-processing |
-
-### Advanced Features
-
-```bash
-# Generate all products for a full model run (parallel processing)
-python processor_cli.py 20250715 12 --workers 8
-
-# Create custom filter for specific use case
-# Edit custom_filters.json, then:
-python processor_cli.py --latest --filter "Severe Weather Core"
-
-# Process with specific output directory
-python processor_cli.py --latest --output-dir /path/to/output
-```
-
-## 🔧 Configuration
-
-### Adding New Parameters
-
-1. **For base GRIB fields**, add to appropriate JSON in `parameters/`:
+### Base GRIB Field
+Add to `parameters/<category>.json`:
 ```json
 {
-  "my_new_field": {
-    "var": "GRIB_VARIABLE_NAME",
+  "my_field": {
+    "var": "TMP",
     "level": "2 m above ground",
-    "cmap": "viridis",
-    "title": "My New Field",
-    "units": "units"
+    "title": "2m Temperature",
+    "units": "K",
+    "cmap": "RdYlBu_r"
   }
 }
 ```
 
-2. **For derived parameters**, create a file in `derived_params/`:
+### Derived Parameter
+Create `derived_params/my_calc.py`:
 ```python
-# derived_params/my_calculation.py
-from .common import _dbg
 import numpy as np
 
-def my_calculation(input1: np.ndarray, input2: np.ndarray) -> np.ndarray:
-    """Calculate my custom parameter"""
-    _dbg("Computing my_calculation with pure NumPy")
-    return input1 + input2 * 2.5
+def my_calculation(temp, dewpoint):
+    return temp - dewpoint
 ```
 
-Then add to `parameters/derived.json`:
+Add to `parameters/derived.json`:
 ```json
 {
-  "my_derived_field": {
+  "my_derived": {
     "derived": true,
     "function": "my_calculation",
-    "inputs": ["base_field1", "base_field2"],
-    "title": "My Derived Field",
-    "units": "custom units",
-    "cmap": "RdBu_r"
+    "inputs": ["t2m", "d2m"],
+    "title": "Temp-Dewpoint Spread",
+    "units": "K"
   }
 }
 ```
 
-
-### Custom Colormaps
-
-Add new colormaps in `config/colormaps.py` for specialized visualizations.
-
-## 📈 Performance Optimization
-
-- **Pure NumPy Operations**: Vectorized meteorological calculations (10x+ faster than MetPy)
-- **Parallel Processing**: Automatically uses N-1 CPU cores (max 8)
-- **Smart Caching**: Skips already-processed products
-- **Batch Loading**: Loads all GRIB fields once, then generates all products
-- **Memory Efficient**: Processes one forecast hour at a time
-- **Optimized Algorithms**: Mixed-phase psychrometrics, vectorized lapse-rate interpolation
-
-### Recent Performance Improvements (v2.1)
-
-| Parameter | Before (MetPy) | After (Pure NumPy) | Speedup |
-|-----------|---------------|-------------------|---------|
-| `wet_bulb_temperature` | ~80ms/52k pts | ~35ms/52k pts | **2.3x faster** |
-| `lapse_rate_03km` | ~150ms/52k pts | ~17ms/52k pts | **8.8x faster** |
-| `mixing_ratio_2m` | ~45ms/52k pts | ~12ms/52k pts | **3.8x faster** |
-
-**Accuracy**: All calculations maintain scientific accuracy with residuals < 1e-6
-
-## 🗄️ Output Structure
+## Output Structure
 
 ```
-outputs/
-└── hrrr/
-    └── 20250715/           # Date
-        └── 12z/            # Model run hour
-            ├── F00/        # Forecast hour directories
-            ├── F01/
-            ├── F02/
-            │   └── conus/  # Fixed output region
-            │       └── F02/
-            │           ├── severe/       # Category folders
-            │           ├── instability/
-            │           ├── surface/
-            │           └── metadata/     # JSON metadata for each product
-            ├── animations/ # 🎬 Animated GIFs (created with tools/create_gifs.py)
-            │   ├── severe/
-            │   │   ├── stp_20250715_12z_animation.gif
-            │   │   └── scp_20250715_12z_animation.gif
-            │   ├── smoke/
-            │   │   ├── near_surface_smoke_20250715_12z_animation.gif
-            │   │   └── visibility_smoke_20250715_12z_animation.gif
-            │   └── instability/
-            └── logs/       # Processing logs
+outputs/hrrr/20251224/12z/
+├── F00/conus/F00/severe/      # Maps by category
+├── F01/conus/F01/instability/
+├── diurnal/                    # Diurnal products
+└── animations/                 # GIFs
 ```
 
-## 🔄 Migration Notes
-
-### Deprecated Functions (v2.1)
-
-If you're using the old MetPy-dependent functions, update your code:
-
-```python
-# OLD (deprecated, but still works with warning)
-from derived_params import wet_bulb_temperature_metpy
-wb = wet_bulb_temperature_metpy(temp_2m, dewpoint_2m, pressure)
-
-# NEW (recommended)
-from derived_params import wet_bulb_temperature
-wb = wet_bulb_temperature(temp_2m, dewpoint_2m, pressure)
-```
-
-See [MIGRATION.md](MIGRATION.md) for detailed migration guide.
-
-## 🔍 Troubleshooting
+## Environment Variables
 
 ```bash
-# Check if data is available for a specific cycle
-python processor_cli.py 20250715 12 --check-availability
-
-# View all available parameters
-python processor_cli.py --list-fields
-
-# View parameters by category
-python processor_cli.py --list-fields --category severe
-
-# Test single parameter processing
-python processor_cli.py --latest --fields sbcape --debug
-
-# Run v2.2 comprehensive validation tests (recommended)
-python tests/test_v22_improvements.py
-
-# Run legacy verification tests
-PYTHONPATH=. python tests/test_metpy_free_refactor.py
-
-# Check what GIFs exist for a model run
-ls outputs/hrrr/20250813/21z/animations/*/
-
-# Test GIF creation for a single category
-cd tools && python create_gifs.py 20250813 21z --categories smoke --max-hours 2
+HRRR_USE_PARALLEL=false    # Disable parallel processing
+HRRR_MAX_WORKERS=4         # Limit workers
+HRRR_DEBUG=1               # Verbose logging
 ```
 
-## 📝 Notes
+## Data Sources
 
-- HRRR data is typically available 45-75 minutes after the model run time
-- NOMADS (primary source) keeps ~2 days of data
-- AWS S3 (backup source) has historical data
-- GFS and RRFS have different schedules and forecast lengths
-- All derived parameters use optimized pure NumPy (no external meteorological libraries required)
-- Complete v2.2 implementation validated with 21 comprehensive unit tests (100% pass rate)
-- Production-ready with SPC compliance and enhanced physics
+- **NOMADS** (primary): ~2 days retention
+- **AWS S3** (backup): Historical archive
+- **Utah Pando** (fallback): Research archive
 
-## 🚦 Environment Variables
+HRRR data typically available 45-75 min after model run time. Synoptic cycles (00/06/12/18Z) have 48h forecasts; others have 18h.
 
-```bash
-# Disable parallel processing
-export HRRR_USE_PARALLEL=false
+## Docs
 
-# Set custom number of workers
-export HRRR_MAX_WORKERS=4
-
-# Change default model
-export HRRR_DEFAULT_MODEL=rrfs
-
-# Enable detailed meteorological calculation logging
-export HRRR_DEBUG=1  # or true/yes/on
-```
-
-## 📜 License
-
-[Your license here]
-
-## 🤝 Contributing
-
-Contributions welcome! Please ensure new parameters include:
-- Proper metadata in JSON configuration
-- Documentation of calculations
-- Appropriate colormaps and units
-- Test coverage for derived parameters
+- [Diurnal Temperature Analysis](docs/DIURNAL_TEMPERATURE.md)
+- [Setup Guide](SETUP.md)
