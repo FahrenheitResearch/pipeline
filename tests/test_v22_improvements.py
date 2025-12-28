@@ -8,7 +8,7 @@ Tests all major v2.2 enhancements:
 - Transport wind methodology
 - Parameter output validation
 
-Author: Claude Code v2.2
+Author: FahrenheitResearch
 Date: 2025-08-16
 """
 import os
