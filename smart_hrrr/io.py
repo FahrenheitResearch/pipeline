@@ -37,13 +37,22 @@ def get_grib_download_dir(cycle: str, model: str = "hrrr") -> Path:
     return grib_dir
 
 
-REQUIRED_TYPES = ("wrfprs", "wrfsfc")
+DEFAULT_FILE_TYPES = ("pressure", "surface")
 
 
-def stage_gribs_for_hour(*, cycle: str, fhr: int, model: str, central_dir: Path, fhr_dir: Path):
+def stage_gribs_for_hour(*, cycle: str, fhr: int, model: str, central_dir: Path, fhr_dir: Path,
+                         file_types: tuple[str, ...] | None = None):
     """Stage GRIB files from central location to forecast hour directory"""
+    from model_config import get_model_registry
+
+    reg = get_model_registry()
+    model_cfg = reg.get_model(model.lower())
+    if not model_cfg:
+        raise ValueError(f"Unknown model for staging: {model}")
+
     hour = int(cycle[-2:])
-    filenames = [f"{model.lower()}.t{hour:02d}z.{ft}f{fhr:02d}.grib2" for ft in REQUIRED_TYPES]
+    types = file_types or DEFAULT_FILE_TYPES
+    filenames = [model_cfg.get_filename(hour, ft, fhr) for ft in types]
 
     # Remove any existing GRIB files that aren't for this hour
     for p in fhr_dir.glob("*.grib2"):

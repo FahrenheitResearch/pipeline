@@ -116,7 +116,6 @@
       "mesocyclone_strength_parameter",
       "surface_richardson_number",
       "ventilation_rate",
-      "fire_weather_index",
       "enhanced_smoke_dispersion_index",
       "cloud_cover",
       "visibility",

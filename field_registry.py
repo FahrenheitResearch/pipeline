@@ -15,13 +15,19 @@ from field_templates import FieldTemplates
 class FieldRegistry:
     """Central registry for HRRR field configurations"""
     
-    def __init__(self, config_dir: Optional[Path] = None):
+    def __init__(self, config_dir: Optional[Path] = None,
+                 include_diurnal: bool = False,
+                 include_disabled: bool = False):
         """Initialize field registry
         
         Args:
             config_dir: Directory containing parameter configuration files
+            include_diurnal: Include diurnal-only products in registry
+            include_disabled: Include disabled/experimental products in registry
         """
         self.config_dir = config_dir or Path(__file__).parent / 'parameters'
+        self.include_diurnal = include_diurnal
+        self.include_disabled = include_disabled
         self.templates = FieldTemplates()
         self._fields = {}
         self._loaded = False
@@ -249,8 +255,14 @@ class FieldRegistry:
         for config_file in self.config_dir.glob('*.json'):
             file_params = self.load_parameter_file(config_file)
             if file_params:
-                print(f"Loaded {len(file_params)} parameters from {config_file.name}")
-                all_params.update(file_params)
+                filtered = {
+                    name: definition
+                    for name, definition in file_params.items()
+                    if not self._should_skip_field(name, definition)
+                }
+                if filtered:
+                    print(f"Loaded {len(filtered)} parameters from {config_file.name}")
+                    all_params.update(filtered)
                 
         return all_params
     
@@ -258,10 +270,25 @@ class FieldRegistry:
         """Load parameter configuration from JSON file"""
         try:
             with open(file_path, 'r') as f:
-                return json.load(f)
+                data = json.load(f)
+                if not isinstance(data, dict):
+                    raise ValueError("Top-level JSON must be an object")
+                return data
         except Exception as e:
             print(f"Error loading {file_path}: {e}")
             return {}
+
+    def _should_skip_field(self, field_name: str, field_def: Any) -> bool:
+        """Return True when a field should be skipped from registry."""
+        if field_name.startswith("_"):
+            return True
+        if not isinstance(field_def, dict):
+            return True
+        if field_def.get("disabled") or field_def.get("hidden"):
+            return not self.include_disabled
+        if (field_def.get("diurnal") or field_def.get("category") == "diurnal") and not self.include_diurnal:
+            return True
+        return False
     
     def build_all_configs(self, param_defs: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
         """Build configurations for all parameters"""
@@ -269,6 +296,8 @@ class FieldRegistry:
         total_built = 0
         
         for field_name, field_def in param_defs.items():
+            if self._should_skip_field(field_name, field_def):
+                continue
             try:
                 config = self.build_field_config(field_name, field_def)
                 if config:

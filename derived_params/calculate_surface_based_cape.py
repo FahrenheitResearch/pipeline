@@ -1,4 +1,5 @@
 from .common import *
+from ._calculate_saturation_vapor_pressure import _calculate_saturation_vapor_pressure
 
 def calculate_surface_based_cape(temp_2m: np.ndarray, dewpoint_2m: np.ndarray, 
                                pressure_surface: np.ndarray) -> np.ndarray:

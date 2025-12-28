@@ -259,10 +259,10 @@ def process_latest_interactive():
     else:
         hours = hours_choice.split()[0]
     
-    # Select worker count
+    # Select map worker count
     max_workers = mp.cpu_count()
     workers = questionary.select(
-        f"Select number of workers (max {max_workers}):",
+        f"Select number of map workers (max {max_workers}):",
         choices=[str(i) for i in [1, 2, 4, max_workers//2, max_workers]]
     ).ask()
     
@@ -271,7 +271,7 @@ def process_latest_interactive():
         "python", "processor_cli.py", "--latest",
         "--categories", ",".join(categories),
         "--hours", hours,
-        "--workers", workers
+        "--map-workers", workers
     ]
     
     console.print(f"\n[bold green]Command to execute:[/bold green]")
@@ -325,7 +325,7 @@ def process_specific_interactive():
         hours = hours_choice
     
     workers = questionary.select(
-        f"Workers (max {mp.cpu_count()}):",
+        f"Map workers (max {mp.cpu_count()}):",
         choices=["1", "2", "4", "8"]
     ).ask()
     
@@ -334,7 +334,7 @@ def process_specific_interactive():
         date, hour,
         "--categories", ",".join(categories),
         "--hours", hours,
-        "--workers", workers
+        "--map-workers", workers
     ]
     
     console.print(f"\n[bold green]Command:[/bold green] [dim]{' '.join(cmd_parts)}[/dim]")
@@ -357,7 +357,7 @@ def run_workflow_interactive():
         date = questionary.text("Date (YYYYMMDD):", default=datetime.now().strftime("%Y%m%d")).ask()
         hour = questionary.select("Hour:", choices=["00", "06", "12", "18"]).ask()
         
-        cmd = f"python processor_cli.py {date} {hour} --hours 0-24 --categories severe,instability --workers 8"
+        cmd = f"python processor_cli.py {date} {hour} --hours 0-24 --categories severe,instability --map-workers 8"
         
     elif workflow == "fire_monitoring":
         console.print("[bold yellow]🔥 Fire Weather Monitoring Workflow[/bold yellow]") 
@@ -365,17 +365,17 @@ def run_workflow_interactive():
         
     elif workflow == "nowcasting":
         console.print("[bold yellow]⛈️ Nowcasting Workflow[/bold yellow]")
-        cmd = "python processor_cli.py --latest --categories reflectivity,surface,severe --hours 0-3 --workers 4"
+        cmd = "python processor_cli.py --latest --categories reflectivity,surface,severe --hours 0-3 --map-workers 4"
         
     elif workflow == "heat_analysis":
         console.print("[bold yellow]🌡️ Heat Stress Analysis Workflow[/bold yellow]")
         date = questionary.text("Date:", default=datetime.now().strftime("%Y%m%d")).ask()
-        cmd = f"python processor_cli.py {date} 12 --hours 0-48 --categories heat,surface --workers 6"
+        cmd = f"python processor_cli.py {date} 12 --hours 0-48 --categories heat,surface --map-workers 6"
         
     elif workflow == "research":
         console.print("[bold yellow]📊 Research Dataset Workflow[/bold yellow]")
         date = questionary.text("Date:", default=datetime.now().strftime("%Y%m%d")).ask()
-        cmd = f"python processor_cli.py {date} 00 --hours 0-48 --workers 8"
+        cmd = f"python processor_cli.py {date} 00 --hours 0-48 --map-workers 8"
         
     elif workflow == "monitoring":
         console.print("[bold yellow]🎯 Operational Monitoring[/bold yellow]")
@@ -512,17 +512,17 @@ def quick_mode(
     workflow: str = typer.Argument(help="Workflow type: severe|fire|nowcast|heat|research|monitor"),
     date: Optional[str] = typer.Option(None, "--date", "-d", help="Date (YYYYMMDD)"),
     hour: Optional[int] = typer.Option(None, "--hour", "-h", help="Hour (0-23)"),
-    workers: int = typer.Option(4, "--workers", "-w", help="Number of workers")
+    map_workers: int = typer.Option(4, "--map-workers", "-w", help="Number of map workers")
 ):
     """⚡ Quick workflow execution"""
     show_banner()
     
     workflows = {
-        "severe": f"python processor_cli.py {date or 'latest'} {hour or ''} --categories severe,instability --hours 0-24 --workers {workers}",
+        "severe": f"python processor_cli.py {date or 'latest'} {hour or ''} --categories severe,instability --hours 0-24 --map-workers {map_workers}",
         "fire": "python processor_cli.py --latest --categories smoke,fire --hours 0-6",
-        "nowcast": "python processor_cli.py --latest --categories reflectivity,surface,severe --hours 0-3 --workers 4",
-        "heat": f"python processor_cli.py {date or 'latest'} 12 --categories heat,surface --hours 0-48 --workers {workers}",
-        "research": f"python processor_cli.py {date or 'latest'} 00 --hours 0-48 --workers {workers}",
+        "nowcast": "python processor_cli.py --latest --categories reflectivity,surface,severe --hours 0-3 --map-workers 4",
+        "heat": f"python processor_cli.py {date or 'latest'} 12 --categories heat,surface --hours 0-48 --map-workers {map_workers}",
+        "research": f"python processor_cli.py {date or 'latest'} 00 --hours 0-48 --map-workers {map_workers}",
         "monitor": "python monitor_continuous.py"
     }
     

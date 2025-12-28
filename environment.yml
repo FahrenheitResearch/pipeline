@@ -1,0 +1,21 @@
+name: hrrr_maps
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - numpy
+  - xarray
+  - cfgrib
+  - eccodes
+  - cartopy
+  - matplotlib
+  - pyproj
+  - requests
+  - psutil
+  - rich
+  - typer
+  - questionary
+  - wgrib2
+  - pip
+  - pip:
+      - pytest

@@ -13,20 +13,54 @@ from multiprocessing import Pool, cpu_count
 import shutil
 
 from .processor_core import HRRRProcessor
+from core import grib_loader
 from field_registry import FieldRegistry
 from derived_params import compute_derived_parameter
+
+
+def _resolve_map_workers(requested: Optional[int]) -> int:
+    env_val = os.environ.get("HRRR_MAP_WORKERS")
+    if requested is not None and requested > 0:
+        return requested
+    if env_val:
+        try:
+            env_workers = int(env_val)
+            if env_workers > 0:
+                return env_workers
+        except ValueError:
+            pass
+    return max(1, cpu_count() - 2)
+
+
+def _resolve_field_dependencies(all_fields: dict, target_fields: List[str]) -> set[str]:
+    needed: set[str] = set()
+    stack = list(target_fields)
+    while stack:
+        name = stack.pop()
+        if name in needed:
+            continue
+        needed.add(name)
+        cfg = all_fields.get(name)
+        if not cfg:
+            continue
+        inputs = cfg.get("inputs", [])
+        for inp in inputs:
+            if inp not in needed:
+                stack.append(inp)
+    return needed
 
 
 class OptimizedHRRRProcessor(HRRRProcessor):
     """Optimized weather model processor that loads all fields once"""
     
-    def __init__(self, model='hrrr'):
+    def __init__(self, model='hrrr', num_workers: Optional[int] = None):
         super().__init__(model=model)
         self._all_base_fields = {}
         self._all_derived_fields = {}
-        self.num_workers = min(cpu_count() - 1, 8)  # Leave one CPU free, max 8 workers
+        self.num_workers = _resolve_map_workers(num_workers)
         
-    def load_all_base_fields(self, pressure_grib_file, surface_grib_file=None):
+    def load_all_base_fields(self, pressure_grib_file, surface_grib_file=None,
+                             field_names: Optional[set[str]] = None):
         """Load all base (non-derived) fields from GRIB files into memory"""
         print("\n🚀 OPTIMIZED: Loading all base fields into memory...")
         start_time = time.time()
@@ -34,6 +68,8 @@ class OptimizedHRRRProcessor(HRRRProcessor):
         # Get all field configurations
         all_fields = self.registry.load_all_fields()
         base_fields = {k: v for k, v in all_fields.items() if not v.get('derived')}
+        if field_names is not None:
+            base_fields = {k: v for k, v in base_fields.items() if k in field_names}
         
         print(f"📊 Found {len(base_fields)} base fields to load")
         
@@ -50,55 +86,73 @@ class OptimizedHRRRProcessor(HRRRProcessor):
             else:
                 pressure_fields[field_name] = field_config
         
-        # Load from pressure file
-        if pressure_fields and pressure_grib_file and os.path.exists(pressure_grib_file):
-            print(f"\n📂 Loading {len(pressure_fields)} fields from pressure file...")
-            for field_name, field_config in pressure_fields.items():
-                try:
-                    print(f"  Loading {field_name}...", end='', flush=True)
-                    data = self.load_field_data(pressure_grib_file, field_name, field_config)
-                    if data is not None:
-                        self._all_base_fields[field_name] = data
-                        print(" ✓")
-                    else:
-                        print(" ✗")
-                except Exception as e:
-                    print(f" ✗ ({str(e)})")
-        
-        # Load from surface file
-        if surface_fields and surface_grib_file and os.path.exists(surface_grib_file):
-            print(f"\n📂 Loading {len(surface_fields)} fields from surface file...")
-            for field_name, field_config in surface_fields.items():
-                try:
-                    print(f"  Loading {field_name}...", end='', flush=True)
-                    data = self.load_field_data(surface_grib_file, field_name, field_config)
-                    if data is not None:
-                        self._all_base_fields[field_name] = data
-                        print(" ✓")
-                    else:
-                        print(" ✗")
-                except Exception as e:
-                    print(f" ✗ ({str(e)})")
-        
-        # Load wrfsfc fields (try surface file first, fall back to pressure)
-        if wrfsfc_fields:
-            print(f"\n📂 Loading {len(wrfsfc_fields)} wrfsfc fields...")
-            for field_name, field_config in wrfsfc_fields.items():
-                try:
-                    print(f"  Loading {field_name}...", end='', flush=True)
-                    data = None
-                    if surface_grib_file and os.path.exists(surface_grib_file):
-                        data = self.load_field_data(surface_grib_file, field_name, field_config)
-                    if data is None and pressure_grib_file and os.path.exists(pressure_grib_file):
-                        data = self.load_field_data(pressure_grib_file, field_name, field_config)
-                    
-                    if data is not None:
-                        self._all_base_fields[field_name] = data
-                        print(" ✓")
-                    else:
-                        print(" ✗")
-                except Exception as e:
-                    print(f" ✗ ({str(e)})")
+        pressure_cache = None
+        surface_cache = None
+        try:
+            # Load from pressure file
+            if pressure_fields and pressure_grib_file and os.path.exists(pressure_grib_file):
+                print(f"\n📂 Loading {len(pressure_fields)} fields from pressure file...")
+                pressure_cache = grib_loader.GribDatasetCache(pressure_grib_file, self.model_name)
+                for field_name, field_config in pressure_fields.items():
+                    try:
+                        print(f"  Loading {field_name}...", end='', flush=True)
+                        data = grib_loader.load_field_from_cache(pressure_cache, field_name, field_config)
+                        if data is None:
+                            data = self.load_field_data(pressure_grib_file, field_name, field_config)
+                        if data is not None:
+                            self._all_base_fields[field_name] = data
+                            print(" ✓")
+                        else:
+                            print(" ✗")
+                    except Exception as e:
+                        print(f" ✗ ({str(e)})")
+            
+            # Load from surface file
+            if surface_fields and surface_grib_file and os.path.exists(surface_grib_file):
+                print(f"\n📂 Loading {len(surface_fields)} fields from surface file...")
+                surface_cache = grib_loader.GribDatasetCache(surface_grib_file, self.model_name)
+                for field_name, field_config in surface_fields.items():
+                    try:
+                        print(f"  Loading {field_name}...", end='', flush=True)
+                        data = grib_loader.load_field_from_cache(surface_cache, field_name, field_config)
+                        if data is None:
+                            data = self.load_field_data(surface_grib_file, field_name, field_config)
+                        if data is not None:
+                            self._all_base_fields[field_name] = data
+                            print(" ✓")
+                        else:
+                            print(" ✗")
+                    except Exception as e:
+                        print(f" ✗ ({str(e)})")
+            
+            # Load wrfsfc fields (try surface file first, fall back to pressure)
+            if wrfsfc_fields:
+                print(f"\n📂 Loading {len(wrfsfc_fields)} wrfsfc fields...")
+                for field_name, field_config in wrfsfc_fields.items():
+                    try:
+                        print(f"  Loading {field_name}...", end='', flush=True)
+                        data = None
+                        if surface_cache and surface_grib_file and os.path.exists(surface_grib_file):
+                            data = grib_loader.load_field_from_cache(surface_cache, field_name, field_config)
+                        if data is None and surface_grib_file and os.path.exists(surface_grib_file):
+                            data = self.load_field_data(surface_grib_file, field_name, field_config)
+                        if data is None and pressure_cache and pressure_grib_file and os.path.exists(pressure_grib_file):
+                            data = grib_loader.load_field_from_cache(pressure_cache, field_name, field_config)
+                        if data is None and pressure_grib_file and os.path.exists(pressure_grib_file):
+                            data = self.load_field_data(pressure_grib_file, field_name, field_config)
+                        
+                        if data is not None:
+                            self._all_base_fields[field_name] = data
+                            print(" ✓")
+                        else:
+                            print(" ✗")
+                    except Exception as e:
+                        print(f" ✗ ({str(e)})")
+        finally:
+            if pressure_cache:
+                pressure_cache.close()
+            if surface_cache:
+                surface_cache.close()
         
         load_time = time.time() - start_time
         print(f"\n✅ Loaded {len(self._all_base_fields)} base fields in {load_time:.1f}s")
@@ -117,7 +171,7 @@ class OptimizedHRRRProcessor(HRRRProcessor):
             return self._all_derived_fields[field_name]
         return None
     
-    def compute_all_derived_fields(self):
+    def compute_all_derived_fields(self, target_fields: Optional[set[str]] = None):
         """Compute all derived fields using cached base fields"""
         print("\n🧮 Computing all derived fields...")
         start_time = time.time()
@@ -125,13 +179,15 @@ class OptimizedHRRRProcessor(HRRRProcessor):
         # Get all derived field configurations
         all_fields = self.registry.load_all_fields()
         derived_fields = {k: v for k, v in all_fields.items() if v.get('derived')}
+        if target_fields is not None:
+            derived_fields = {k: v for k, v in derived_fields.items() if k in target_fields}
         
         print(f"📊 Found {len(derived_fields)} derived fields to compute")
         
         # Sort by dependency order (simple approach - may need refinement)
         computed = set()
         iterations = 0
-        max_iterations = 10
+        max_iterations = max(10, len(derived_fields) + 1)
         
         while len(computed) < len(derived_fields) and iterations < max_iterations:
             iterations += 1
@@ -236,8 +292,8 @@ class OptimizedHRRRProcessor(HRRRProcessor):
             print(f"❌ Error creating composite {field_name}: {e}")
             return None
     
-    def process_all_products_parallel(self, cycle, forecast_hour=0, output_dir=None, 
-                                    categories=None):
+    def process_all_products_parallel(self, cycle, forecast_hour=0, output_dir=None,
+                                      categories=None, fields: Optional[List[str]] = None):
         """Process all products with parallel map generation"""
         print(f"\n🚀 PARALLEL MAP GENERATION")
         print(f"🔧 Using {self.num_workers} worker processes")
@@ -253,15 +309,36 @@ class OptimizedHRRRProcessor(HRRRProcessor):
         # Get all fields to process
         all_fields = self.registry.get_all_fields()
         
-        # Filter by categories if specified
-        if categories:
+        # Filter by explicit fields or categories if specified
+        if fields:
+            fields_to_process = []
+            missing = []
+            for name in fields:
+                cfg = all_fields.get(name)
+                if cfg:
+                    fields_to_process.append((name, cfg))
+                else:
+                    missing.append(name)
+            if missing:
+                print(f"⚠️ Unknown fields skipped: {', '.join(sorted(set(missing)))}")
+        elif categories:
             fields_to_process = []
             for category in categories:
-                cat_fields = [(name, config) for name, config in all_fields.items() 
-                             if config.get('category') == category]
+                cat_fields = [(name, config) for name, config in all_fields.items()
+                              if config.get('category') == category]
                 fields_to_process.extend(cat_fields)
         else:
             fields_to_process = list(all_fields.items())
+
+        # De-duplicate in case of overlapping categories or fields
+        seen = set()
+        deduped = []
+        for name, cfg in fields_to_process:
+            if name in seen:
+                continue
+            seen.add(name)
+            deduped.append((name, cfg))
+        fields_to_process = deduped
         
         # Group by category for organized output
         categories_dict = {}
@@ -427,13 +504,15 @@ def generate_single_map(args):
 
 
 def process_hrrr_parallel(cycle: str, forecast_hour: int = 0, output_dir: Optional[Path] = None,
-                         categories: Optional[List[str]] = None, model: str = 'hrrr'):
+                         categories: Optional[List[str]] = None, fields: Optional[List[str]] = None,
+                         model: str = 'hrrr', map_workers: Optional[int] = None,
+                         compute_only: bool = False):
     """Main entry point for parallel processing"""
     print("="*60)
     print(f"🚀 {model.upper()} PARALLEL MAP PROCESSOR")
     print("="*60)
     
-    processor = OptimizedHRRRProcessor(model=model)
+    processor = OptimizedHRRRProcessor(model=model, num_workers=map_workers)
     processor.set_region('conus')
     
     # Handle both cycle formats: YYYYMMDDHH and YYYYMMDD_HHZ
@@ -510,19 +589,45 @@ def process_hrrr_parallel(cycle: str, forecast_hour: int = 0, output_dir: Option
     if sfc_file:
         print(f"  Surface: {sfc_file}")
     
+    all_fields = processor.registry.get_all_fields()
+    if fields:
+        if categories:
+            print("⚠️ Fields provided; categories will be ignored")
+        target_fields = [f for f in fields if f in all_fields]
+        missing = [f for f in fields if f not in all_fields]
+        if missing:
+            print(f"⚠️ Unknown fields skipped: {', '.join(sorted(set(missing)))}")
+    elif categories:
+        target_fields = [name for name, cfg in all_fields.items()
+                         if cfg.get('category') in categories]
+    else:
+        target_fields = list(all_fields.keys())
+
+    if not target_fields:
+        print("❌ No valid fields to process!")
+        return []
+
+    required_fields = _resolve_field_dependencies(all_fields, target_fields)
+    base_required = {f for f in required_fields if not all_fields.get(f, {}).get('derived')}
+    derived_required = {f for f in required_fields if all_fields.get(f, {}).get('derived')}
+
     # Phase 1: Load all base fields (sequential - I/O bound)
     print("\n" + "="*60)
     print("PHASE 1: DATA LOADING (Sequential)")
     print("="*60)
     processor.load_all_base_fields(str(prs_file) if prs_file else None, 
-                                   str(sfc_file) if sfc_file else None)
+                                   str(sfc_file) if sfc_file else None,
+                                   field_names=base_required)
     
     # Phase 2: Compute all derived fields (sequential - depends on order)
     print("\n" + "="*60)
     print("PHASE 2: DERIVED FIELD COMPUTATION (Sequential)")
     print("="*60)
-    processor.compute_all_derived_fields()
+    processor.compute_all_derived_fields(target_fields=derived_required)
     
+    if compute_only:
+        return sorted(target_fields)
+
     # Phase 3: Generate all plots IN PARALLEL!
     print("\n" + "="*60)
     print("PHASE 3: MAP GENERATION (Parallel)")
@@ -531,7 +636,8 @@ def process_hrrr_parallel(cycle: str, forecast_hour: int = 0, output_dir: Option
         cycle=cycle,
         forecast_hour=forecast_hour,
         output_dir=output_dir,
-        categories=categories
+        categories=categories,
+        fields=fields
     )
     
     return output_files

@@ -8,7 +8,6 @@ Fixed continuous HRRR monitor - addresses all known issues:
 5. Checks F00/F01 availability to detect new cycles
 """
 
-import subprocess
 import time
 import sys
 import os
@@ -16,6 +15,7 @@ import requests
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import logging
+from smart_hrrr.orchestrator import process_model_run
 
 # Set up clean logging
 logging.basicConfig(
@@ -116,73 +116,34 @@ def get_proper_cycle_to_process():
     return prev_cycle_time.strftime("%Y%m%d%H")
 
 def run_processor_for_hours(cycle, forecast_hours):
-    """Run processor for specific forecast hours only"""
+    """Run processor for specific forecast hours only (respects HRRR_MAP_WORKERS)"""
     if not forecast_hours:
         return True
         
-    # Build hour list string
     hour_list = ",".join(str(h) for h in sorted(forecast_hours))
-    
     logger.info(f"🚀 Processing F{hour_list} for cycle {cycle}")
-    
-    cmd = [
-        'python', 'processor_cli.py',
-        cycle[:8],  # date
-        cycle[8:],  # hour
-        '--hours', hour_list,
-        '--model', 'hrrr'
-    ]
-    
-    # Enable parallel processing for speed
-    os.environ['HRRR_USE_PARALLEL'] = 'true'
-    
-    logger.info(f"🔧 Running command: {' '.join(cmd)}")
-    
-    # Don't redirect stderr in debug mode
-    try:
-        process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,  # Capture stderr instead of hiding it
-            text=True,
-            bufsize=1
-        )
-        
-        # Read both stdout and stderr
-        import threading
-        
-        def read_stdout():
-            for line in process.stdout:
-                line = line.strip()
-                # Show important lines
-                if line and any(keyword in line for keyword in [
-                    'Processing', 'Downloading', 'completed', 'ERROR', 'Failed', 
-                    '✅', '❌', '📥', '⬇️', 'NOMADS', 'AWS', 'Phase'
-                ]):
-                    logger.info(f"  {line}")
-        
-        def read_stderr():
-            for line in process.stderr:
-                line = line.strip()
-                if line and not line.startswith("DEBUG:cfgrib"):  # Skip cfgrib debug
-                    logger.info(f"  [STDERR] {line}")
-        
-        # Start threads to read both streams
-        stdout_thread = threading.Thread(target=read_stdout)
-        stderr_thread = threading.Thread(target=read_stderr)
-        stdout_thread.start()
-        stderr_thread.start()
-        
-        # Wait for process to complete
-        process.wait()
-        stdout_thread.join()
-        stderr_thread.join()
-        
-        return process.returncode == 0
-        
-    except Exception as e:
-        logger.error(f"Error running processor: {e}")
-        return False
+
+    map_workers = None
+    env_workers = os.environ.get("HRRR_MAP_WORKERS")
+    if env_workers:
+        try:
+            map_workers = int(env_workers)
+        except ValueError:
+            map_workers = None
+
+    results = process_model_run(
+        model="hrrr",
+        date=cycle[:8],
+        hour=int(cycle[8:]),
+        forecast_hours=sorted(forecast_hours),
+        max_workers=map_workers,
+        map_workers=map_workers,
+        force_reprocess=False,
+        download_workers=2,
+        prefetch=1,
+    )
+
+    return all(r.get("success") for r in results)
 
 def main():
     """Main monitoring loop"""

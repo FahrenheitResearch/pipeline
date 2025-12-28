@@ -269,9 +269,6 @@ VR = Transport_Wind_Speed × Boundary_Layer_Height
 - 6,000-20,000 m²/s: Acceptable for most burns
 - >20,000 m²/s: Good dispersion conditions
 
-### Fire Weather Index
-**CLI:** `fire_weather_index` | Composite fire weather conditions from T, RH, wind
-
 ---
 
 ## 🌡️ Heat Stress Parameters
@@ -456,7 +453,7 @@ cd tools && python create_gifs.py --latest --categories severe --max-hours 12
 ### Fire Weather Monitoring
 ```bash
 # Fire weather with improved ventilation rate
-python processor_cli.py --latest --fields ventilation_rate,fire_weather_index
+python processor_cli.py --latest --fields ventilation_rate
 
 # Smoke conditions
 python processor_cli.py --latest --categories smoke --hours 0-6

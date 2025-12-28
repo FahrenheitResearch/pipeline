@@ -224,48 +224,17 @@ def compute_derived_parameter(param_name: str, input_data: Dict[str, np.ndarray]
     
     func = _DERIVED_FUNCTIONS[function_name]
     
-    # Special handling for SCP - make mucin optional
-    if param_name == 'scp':
-        # Build args conditionally for SCP
-        required_inputs = ['mucape', 'effective_srh', 'effective_shear']
-        args = []
-        
-        # Add required inputs
-        for input_name in required_inputs:
-            if input_name in input_data:
-                args.append(input_data[input_name])
-            else:
-                raise ValueError(f"Missing required input data for SCP: {input_name}")
-        
-        # Conditionally add mucin if available
-        if 'mucin' in input_data:
-            args.append(input_data['mucin'])
-            print("🔍 SCP: Using full SPC recipe with MUCIN")
+    # Standard behavior for all derived parameters
+    args = []
+    for input_name in inputs:
+        if input_name in input_data:
+            args.append(input_data[input_name])
         else:
-            print("Warning: SCP - MUCIN not available, using fallback recipe (no CIN penalty)")
-        
-        # Compute the derived parameter
-        result = func(*args, **kwargs)
-        
-        # Quick sanity check for SCP diagnostics
-        if param_name == 'scp':
-            # SCP returns a tuple (scp_raw, scp_plot)
-            scp_raw, scp_plot = result
-            print("🔎  SCP diagnostics — raw max:", np.nanmax(scp_raw),
-                  "clip max:", np.nanmax(scp_plot))
-            # Expect raw somewhere 15-25 on big days, plot ALWAYS <= 10
-            result = scp_raw  # Return the unclipped version - clipping happens in plotting layer
-    else:
-        # Standard behavior for all other parameters
-        args = []
-        for input_name in inputs:
-            if input_name in input_data:
-                args.append(input_data[input_name])
-            else:
-                raise ValueError(f"Missing input data for {input_name}")
-        
-        # Compute the derived parameter
-        result = func(*args, **kwargs)
+            raise ValueError(f"Missing input data for {input_name}")
+    
+    result = func(*args, **kwargs)
+    if isinstance(result, tuple):
+        result = result[0]
     
     return result
 

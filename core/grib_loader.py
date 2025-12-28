@@ -10,6 +10,129 @@ import cfgrib
 import signal
 
 
+class GribDatasetCache:
+    """Cache cfgrib datasets opened with filter_by_keys for reuse."""
+
+    def __init__(self, grib_file, model_name=None):
+        self.grib_file = grib_file
+        self.model_name = model_name
+        self._datasets = {}
+        self._backend_kwargs = {}
+        if model_name == 'gfs' or os.environ.get('CFGRIB_USE_INDEX_CACHE') == '0':
+            self._backend_kwargs['indexpath'] = ''
+
+    def get_dataset(self, access_keys):
+        try:
+            cache_key = tuple(sorted(access_keys.items()))
+        except TypeError:
+            return None
+
+        if cache_key in self._datasets:
+            return self._datasets[cache_key]
+
+        try:
+            ds = cfgrib.open_dataset(
+                self.grib_file,
+                filter_by_keys=access_keys,
+                backend_kwargs=self._backend_kwargs
+            )
+        except Exception:
+            return None
+
+        self._datasets[cache_key] = ds
+        return ds
+
+    def close(self):
+        for ds in self._datasets.values():
+            try:
+                ds.close()
+            except Exception:
+                pass
+        self._datasets.clear()
+
+
+def _build_access_keys(field_config):
+    access_keys = field_config.get('access', {}).copy()
+    if 'paramId' in access_keys:
+        surface_params = {167: 't2m', 168: 'd2m', 165: 'u10', 166: 'v10', 260242: 'r2'}
+        if access_keys['paramId'] in surface_params:
+            access_keys.setdefault('typeOfLevel', 'heightAboveGround')
+            access_keys.setdefault('level', 2 if access_keys['paramId'] in [167, 168, 260242] else 10)
+    return access_keys
+
+
+def _access_keys_compatible(access_keys):
+    level = access_keys.get('level')
+    if isinstance(level, (list, tuple, dict)):
+        return False
+    return True
+
+
+def _unknown_var_matches(unknown_var, field_config):
+    var_name = field_config.get('var', '')
+    if not var_name:
+        return False
+    grib_name = unknown_var.attrs.get('GRIB_shortName', '')
+    grib_param_name = unknown_var.attrs.get('GRIB_parameterName', '')
+    var_lower = str(var_name).lower()
+    grib_shortname_match = str(field_config.get('grib_shortname_match', '')).lower()
+    if grib_name.lower() == var_lower:
+        return True
+    if grib_param_name.lower().replace(' ', '_') == var_lower:
+        return True
+    if grib_shortname_match and grib_name.lower() == grib_shortname_match:
+        return True
+    return False
+
+
+def _select_var_from_dataset(ds, field_config):
+    var_name = field_config.get('var')
+    if not var_name:
+        return None
+
+    if var_name in ds.data_vars:
+        return ds[var_name]
+
+    lower_name = var_name.lower()
+    if lower_name in ds.data_vars:
+        return ds[lower_name]
+
+    upper_name = var_name.upper()
+    if upper_name in ds.data_vars:
+        return ds[upper_name]
+
+    if 'unknown' in ds.data_vars and _unknown_var_matches(ds['unknown'], field_config):
+        return ds['unknown']
+
+    return None
+
+
+def load_field_from_cache(cache, field_name, field_config):
+    """Load a field using a cached cfgrib dataset when possible."""
+    if cache is None:
+        return None
+    if field_config.get('requires_multi_dataset') or field_config.get('wgrib2_pattern'):
+        return None
+
+    access_keys = _build_access_keys(field_config)
+    if not access_keys or not _access_keys_compatible(access_keys):
+        return None
+
+    ds = cache.get_dataset(access_keys)
+    if ds is None:
+        return None
+
+    data = _select_var_from_dataset(ds, field_config)
+    if data is None:
+        return None
+
+    data = _apply_data_transformations(data, field_config)
+    try:
+        data = data.load()
+    except Exception:
+        pass
+    return data
+
 def load_field(grib_file, field_name, field_config, model_name):
     """Load specific field data - uses robust multi-dataset approach when needed"""
     # Check if this field requires robust loading

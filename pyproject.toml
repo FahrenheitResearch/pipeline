@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hrrr-maps-pipeline"
+version = "0.1.0"
+description = "High-performance HRRR map processing pipeline"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {file = "LICENSE"}
+authors = [{name = "FahrenheitResearch"}]
+dependencies = [
+  "numpy",
+  "xarray",
+  "cfgrib",
+  "eccodes",
+  "cartopy",
+  "matplotlib",
+  "requests",
+  "psutil",
+  "rich",
+  "typer",
+  "questionary",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+hrrr-maps = "processor_cli:main"
+hrrr-cli = "hrrr_cli:app"
+
+[tool.setuptools]
+packages = ["core", "smart_hrrr", "derived_params", "config", "parameters"]
+py-modules = [
+  "processor_cli",
+  "processor_batch",
+  "processor_base",
+  "monitor_continuous",
+  "hrrr_cli",
+  "field_registry",
+  "field_templates",
+  "model_config",
+  "map_enhancer",
+  "generate_all_code",
+]
+include-package-data = true
+
+[tool.setuptools.package-data]
+parameters = ["*.json"]

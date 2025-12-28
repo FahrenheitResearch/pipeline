@@ -1,4 +1,6 @@
 from .common import *
+from ._calculate_saturation_vapor_pressure import _calculate_saturation_vapor_pressure
+from .surface_based_cape_and_cin import surface_based_cape_and_cin
 
 def most_unstable_cape_and_cin(temp_profile_k: np.ndarray, dewpoint_profile_k: np.ndarray,
                              pressure_profile_pa: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:

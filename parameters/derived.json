@@ -27,19 +27,6 @@
     "description": "Enhanced SCP using effective layers for better accuracy in capped environments"
   },
 
-  "d12_composite": {
-    "title": "D12 Severe Weather Composite",
-    "units": "dimensionless", 
-    "cmap": "plasma",
-    "levels": [0.05, 0.10, 0.15, 0.20, 0.30, 0.40, 0.50, 0.60, 0.75, 0.90],
-    "extend": "max",
-    "category": "severe",
-    "derived": true,
-    "inputs": ["mlcape", "wind_shear_06km", "srh_01km", "mlcin", "lcl_height", "pwat"],
-    "function": "d12_composite",
-    "description": "Comprehensive severe weather diagnostic using multiplicative scaling of normalized parameters. Values ≥0.60 indicate high severe weather potential, 0.30-0.59 moderate potential, <0.30 low potential. Based on operational severe weather research and designed to identify environments where all critical supercell ingredients are simultaneously favorable."
-  },
-
   "stp_cin": {
     "title": "STP (CIN Version)",
     "units": "dimensionless",
@@ -485,19 +472,6 @@
 
   "_comment_fire_weather": "=== FIRE WEATHER PARAMETERS ===",
   
-  "fire_weather_index": {
-    "title": "Fire Weather Index",
-    "units": "index",
-    "cmap": "YlOrRd",
-    "levels": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-    "extend": "max",
-    "category": "fire",
-    "derived": true,
-    "inputs": ["t2m", "rh2m", "u10", "v10"],
-    "function": "fire_weather_index_from_components",
-    "description": "Composite fire weather conditions index"
-  },
-
   "ventilation_rate": {
     "title": "Ventilation Rate",
     "units": "m²/s",

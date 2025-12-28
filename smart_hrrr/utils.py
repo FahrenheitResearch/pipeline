@@ -1,4 +1,5 @@
 import logging
+import shutil
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, List
@@ -46,6 +47,18 @@ def setup_logging(debug: bool = False, output_dir: Optional[Path] = None) -> log
     logger = logging.getLogger(__name__)
     logger.info(f"Smart HRRR processor initialized. Log: {log_file}")
     return logger
+
+
+def check_wgrib2(logger: Optional[logging.Logger] = None) -> bool:
+    """Warn if wgrib2 is missing (required for some GRIB extractions)."""
+    logger = logger or logging.getLogger(__name__)
+    if shutil.which("wgrib2"):
+        return True
+    logger.warning(
+        "wgrib2 not found on PATH. Some products (e.g., UH, VIL, PWAT) may be skipped."
+    )
+    logger.warning("Install via conda-forge: conda install -c conda-forge wgrib2")
+    return False
 
 
 def check_system_memory():

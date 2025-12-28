@@ -1,4 +1,8 @@
 from .common import *
+from ._calculate_saturation_vapor_pressure import _calculate_saturation_vapor_pressure
+from ._find_lcl_bolton import _find_lcl_bolton
+from ._moist_adiabatic_temperature import _moist_adiabatic_temperature
+from ._calculate_virtual_temperature import _calculate_virtual_temperature
 
 def surface_based_cape_and_cin(temp_profile_k: np.ndarray, dewpoint_profile_k: np.ndarray,
                              pressure_profile_pa: np.ndarray, 

@@ -1,4 +1,5 @@
 from .common import *
+from .calculate_surface_based_cin import calculate_surface_based_cin
 
 def calculate_mixed_layer_cin(temp_2m: np.ndarray, dewpoint_2m: np.ndarray,
                             pressure_surface: np.ndarray) -> np.ndarray:

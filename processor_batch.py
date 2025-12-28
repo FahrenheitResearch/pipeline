@@ -7,9 +7,13 @@ from smart_hrrr.parallel_engine import process_hrrr_parallel as _impl
 
 
 def process_hrrr_parallel(cycle: str, forecast_hour: int = 0, output_dir: Optional[Path] = None,
-                         categories: Optional[List[str]] = None, model: str = 'hrrr'):
+                         categories: Optional[List[str]] = None, fields: Optional[List[str]] = None,
+                         model: str = 'hrrr', map_workers: Optional[int] = None,
+                         compute_only: bool = False):
     """Process HRRR data in parallel - wrapper for backward compatibility"""
-    return _impl(cycle=cycle, forecast_hour=forecast_hour, output_dir=output_dir, categories=categories, model=model)
+    return _impl(cycle=cycle, forecast_hour=forecast_hour, output_dir=output_dir,
+                 categories=categories, fields=fields, model=model, map_workers=map_workers,
+                 compute_only=compute_only)
 
 
 if __name__ == "__main__":

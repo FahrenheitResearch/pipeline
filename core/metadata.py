@@ -205,7 +205,6 @@ def _parse_calculation_from_source(source, function_name):
         'energy_helicity_index': 'EHI = (CAPE × SRH) / 160000',
         'bulk_richardson_number': 'BRN = CAPE / (0.5 × Shear²)',
         'crosswind_component': 'Crosswind = u × sin(θ) + v × cos(θ)\nwhere θ = reference_direction',
-        'fire_weather_index': 'FWI = f(T, RH, WindSpeed)\nCombines temperature, humidity, wind',
         'wind_shear_magnitude': 'Shear = √(u_shear² + v_shear²)',
         'ventilation_rate_from_components': 'VR = WindSpeed × PBL_Height\nWindSpeed = √(u² + v²)',
         'effective_srh': 'Effective SRH = SRH × (CAPE/2500)\nwith LCL and CIN adjustments',

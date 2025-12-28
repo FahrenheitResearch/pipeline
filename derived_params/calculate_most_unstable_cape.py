@@ -1,4 +1,5 @@
 from .common import *
+from .calculate_surface_based_cape import calculate_surface_based_cape
 
 def calculate_most_unstable_cape(temp_2m: np.ndarray, dewpoint_2m: np.ndarray,
                                pressure_surface: np.ndarray) -> np.ndarray:
